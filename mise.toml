@@ -1,0 +1,59 @@
+# mise configuration for ogl library
+
+[shell_alias]
+mr = "mise run"
+
+[vars]
+GOTESTSUM_OPTIONS = "--format testdox"
+
+[tasks.test]
+description = "Run all tests with gotestsum"
+run = "gotestsum {{vars.GOTESTSUM_OPTIONS}} -- -v ./..."
+
+[tasks."test:watch"]
+description = "Run tests in watch mode"
+run = "gotestsum {{vars.GOTESTSUM_OPTIONS}} --watch -- -v ./..."
+
+[tasks."test:coverage"]
+description = "Run tests with coverage report"
+run = """
+gotestsum {{vars.GOTESTSUM_OPTIONS}} -- -v -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out -o coverage.html
+echo "Coverage report generated: coverage.html"
+"""
+
+[tasks."test:short"]
+description = "Run only short tests"
+run = "gotestsum {{vars.GOTESTSUM_OPTIONS}} -- -v -short ./..."
+
+[tasks."test:verbose"]
+description = "Run tests with verbose output"
+run = "gotestsum --format standard-verbose -- -v ./..."
+
+[tasks."test:json"]
+description = "Run tests with JSON output"
+run = "gotestsum --jsonfile test-output.json -- -v ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run ./..."
+
+[tasks.fmt]
+description = "Format Go code"
+run = "gofmt -s -w ."
+
+[tasks."fmt:check"]
+description = "Check Go code formatting"
+run = "test -z $(gofmt -l .)"
+
+[tasks.clean]
+description = "Clean test artifacts"
+run = "rm -f coverage.out coverage.html test-output.json"
+
+[tasks."doc:serve"]
+description = "Start local documentation server on http://localhost:6060"
+run = """
+echo "Starting documentation server..."
+echo "Open http://localhost:6060/pkg/github.com/ovya/ogl/ in your browser"
+godoc -http=:6060
+"""
