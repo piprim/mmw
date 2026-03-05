@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2119,SC2120
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+(shopt -p inherit_errexit &>/dev/null) && shopt -s inherit_errexit
+
+APP_ROOT_PATH=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
+ST_QUIET=true
+. "$APP_ROOT_PATH/scripts/libs/st.bash"
+
+st.quiet
+
+st.doing "Environnement installation"
+st.do mise install
+st.done
+
+st.doing 'Installing pre-commit hook'
+mise generate git-pre-commit --task=pre-commit >"$(git rev-parse --git-path hooks)/pre-commit"
+chmod +x "$(git rev-parse --git-path hooks)/pre-commit"
+st.done
+
+st.doing 'Setup the project'
+st.do mise run setup
+st.done
+
+cd "${APP_ROOT_PATH}" || exit 1
+
+st.success "Configuration Successfully Terminated"

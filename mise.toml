@@ -6,15 +6,6 @@ experimental = true
 [tools.go]
 version = "latest"
 
-[hooks]
-preinstall = "true"
-postinstall = [
-  'mise generate git-pre-commit --task=pre-commit > "$(git rev-parse --git-path hooks)/pre-commit"',
-  'chmod +x "$(git rev-parse --git-path hooks)/pre-commit"',
-  "mise run setup",
-  "mise run doctor"
-]
-
 [shell_alias]
 mr = "mise run"
 
