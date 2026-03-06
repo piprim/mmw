@@ -25,7 +25,7 @@ type Context struct {
 // GetAppEnv returns the environment name (e.g., "production", "development")
 // which is used to load environment-specific configuration files.
 type Config interface {
-	GetAppEnv() string
+	GetAppEnv() fmt.Stringer
 }
 
 // NewContext creates a new configuration context.
@@ -55,7 +55,7 @@ func (c *Context) Fill(config Config) error {
 		return fmt.Errorf("viper failed to read the default configuration: %w", err)
 	}
 
-	file := config.GetAppEnv() + ".toml"
+	file := config.GetAppEnv().String() + ".toml"
 	envConfig, err := fs.ReadFile(configFS, "configs/"+file)
 	if err == nil { // Env config may not exist.
 		// Merge environment-specific config
