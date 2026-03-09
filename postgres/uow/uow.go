@@ -15,6 +15,9 @@ type DBExecutor interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+
+	// SendBatch to support bulk operations safely
+	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
 }
 
 type txKey struct{}
@@ -38,10 +41,37 @@ func NewUnitOfWork(pool *pgxpool.Pool) *UnitOfWork {
 	return &UnitOfWork{pool: pool}
 }
 
-func (u *UnitOfWork) WithTransaction(ctx context.Context, fn func(txCtx context.Context) error) error {
+func (u *UnitOfWork) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
+	// 1. Check if we are ALREADY inside a transaction
+	if existingTx, ok := ctx.Value(txKey{}).(pgx.Tx); ok {
+		// We are nested! Tell pgx to create a SAVEPOINT instead of a new connection.
+		nestedTx, err := existingTx.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("cannot start nested transaction (savepoint): %w", err)
+		}
+
+		// This will only rollback to the SAVEPOINT, leaving the outer transaction intact
+		defer func() { _ = nestedTx.Rollback(ctx) }()
+
+		// Wrap the nestedTx in the context for any deeper calls
+		ctxWithNestedTx := context.WithValue(ctx, txKey{}, nestedTx)
+
+		if err := fn(ctxWithNestedTx); err != nil {
+			return err
+		}
+
+		// "Committing" a savepoint just releases it, it doesn't commit the outer transaction
+		if err := nestedTx.Commit(ctx); err != nil {
+			return fmt.Errorf("cannot release savepoint: %w", err)
+		}
+
+		return nil
+	}
+
+	// 2. We are NOT nested. Start a brand new root transaction from the pool.
 	tx, err := u.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("can not start transaction: %w", err)
+		return fmt.Errorf("cannot start root transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -51,9 +81,8 @@ func (u *UnitOfWork) WithTransaction(ctx context.Context, fn func(txCtx context.
 		return err
 	}
 
-	err = tx.Commit(ctx)
-	if err != nil {
-		return fmt.Errorf("can not commit transaction: %w", err)
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("cannot commit root transaction: %w", err)
 	}
 
 	return nil
