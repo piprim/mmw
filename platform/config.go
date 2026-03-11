@@ -12,6 +12,8 @@ type Config interface {
 	GetAppName() string
 	// GetPort returns the port of the HTTP server.
 	GetServerPort() string
+	// GetHost returns the host of the HTTP server.
+	GetServerHost() string
 	// GetDatabaseURL returns the URL of the database.
 	GetDatabaseURL() string
 }

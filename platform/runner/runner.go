@@ -1,3 +1,4 @@
+// libs/ogl/platform/runner/runner.go
 package runner
 
 import (
@@ -10,6 +11,7 @@ import (
 
 	"github.com/ovya/ogl/oglcore"
 	"github.com/ovya/ogl/platform"
+	"github.com/ovya/ogl/platform/middleware"
 	"github.com/rotisserie/eris"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -29,19 +31,21 @@ type Pinger interface {
 }
 
 type App struct {
-	config  platform.Config
-	logger  *slog.Logger
-	modules []oglcore.Module
-	db      Pinger // Interface! No pgxpool leak here.
+	config      platform.Config
+	logger      *slog.Logger
+	modules     []oglcore.Module
+	db          Pinger                  // Interface! No pgxpool leak here.
+	middlewares []middleware.Middleware // Add this
 }
 
 // New creates a new Server Application instance
-func New(cfg platform.Config, logger *slog.Logger, db Pinger, modules []oglcore.Module) *App {
+func New(cfg platform.Config, logger *slog.Logger, db Pinger, modules []oglcore.Module, mw ...middleware.Middleware) *App {
 	return &App{
-		config:  cfg,
-		logger:  logger,
-		modules: modules,
-		db:      db,
+		config:      cfg,
+		logger:      logger,
+		modules:     modules,
+		db:          db,
+		middlewares: mw,
 	}
 }
 
@@ -79,11 +83,12 @@ func (a *App) Run(ctx context.Context) error {
 
 	// 3. Middleware
 	var rootHandler http.Handler = mux
-	// rootHandler = loggingMiddleware(rootHandler, a.logger)
-	// rootHandler = withCORS(a.config, rootHandler)
+	// Apply middlewares in reverse order so the first one passed is the outermost
+	for i := len(a.middlewares) - 1; i >= 0; i-- {
+		rootHandler = a.middlewares[i](rootHandler)
+	}
 
 	port := a.config.GetServerPort()
-
 	server := &http.Server{
 		Addr:              port,
 		Handler:           h2c.NewHandler(rootHandler, &http2.Server{}),
