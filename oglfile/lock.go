@@ -1,5 +1,5 @@
 // From https://github.com/sevlyar/go-daemon
-package file
+package oglfile
 
 import (
 	"fmt"

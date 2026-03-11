@@ -1,7 +1,8 @@
-package config
+package oglconfig
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"testing/fstest"
@@ -31,8 +32,15 @@ type Database struct {
 	Name     string `mapstructure:"name"`
 }
 
-func (c *TestConfig) GetAppEnv() string {
-	return c.Environment
+// envString is a simple type that implements fmt.Stringer
+type envString string
+
+func (e envString) String() string {
+	return string(e)
+}
+
+func (c *TestConfig) GetAppEnv() fmt.Stringer {
+	return envString(c.Environment)
 }
 
 func TestContext_Fill_MissingEnvironmentVariables(t *testing.T) {

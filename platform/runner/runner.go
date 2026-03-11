@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ovya/ogl/core"
+	"github.com/ovya/ogl/oglcore"
 	"github.com/ovya/ogl/platform"
 	"github.com/rotisserie/eris"
 	"golang.org/x/net/http2"
@@ -31,12 +31,12 @@ type Pinger interface {
 type App struct {
 	config  platform.Config
 	logger  *slog.Logger
-	modules []core.Module
+	modules []oglcore.Module
 	db      Pinger // Interface! No pgxpool leak here.
 }
 
 // New creates a new Server Application instance
-func New(cfg platform.Config, logger *slog.Logger, db Pinger, modules []core.Module) *App {
+func New(cfg platform.Config, logger *slog.Logger, db Pinger, modules []oglcore.Module) *App {
 	return &App{
 		config:  cfg,
 		logger:  logger,
@@ -82,7 +82,7 @@ func (a *App) Run(ctx context.Context) error {
 	// rootHandler = loggingMiddleware(rootHandler, a.logger)
 	// rootHandler = withCORS(a.config, rootHandler)
 
-	port := a.config.GetPort()
+	port := a.config.GetServerPort()
 
 	server := &http.Server{
 		Addr:              port,
