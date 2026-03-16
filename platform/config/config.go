@@ -1,3 +1,4 @@
+// libs/ogl/platform/config/config.go
 package oglpfconfig
 
 import (

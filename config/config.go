@@ -19,6 +19,10 @@ type Context struct {
 	fs fs.FS
 	// If envs is not nil, use as environnement variable (eg. mocking)
 	envs map[string]string
+	// namespace of the secrets.
+	// <PREFIX>_DATABASE_PASSWORD from monolith.
+	// If it is running as a standalone Microservice, it owns the process and uses standard names DATABASE_PASSWORD.
+	prefix string
 }
 
 // Config is the interface that configuration structs must implement.
@@ -31,27 +35,29 @@ type Config interface {
 // NewContext creates a new configuration context.
 // The fs parameter must contain configs/default.toml and optionally configs/<APP_ENV>.toml.
 // If envs is nil, environment variables are read from the OS; otherwise the provided map is used.
-func NewContext(ctx context.Context, lfs fs.FS, envs map[string]string) *Context {
+func NewContext(ctx context.Context, envprefix string, lfs fs.FS, envs map[string]string) *Context {
 	return &Context{
-		ctx:  ctx,
-		fs:   lfs,
-		envs: envs,
+		ctx:    ctx,
+		fs:     lfs,
+		envs:   envs,
+		prefix: envprefix,
 	}
 }
 
 // Fill fills the configuration `config` from the context `c`.
 func (c *Context) Fill(config Config) error {
-	if err := envUnmarshal(c.ctx, config, c.envs); err != nil {
+	if err := envUnmarshal(c.ctx, config, c.envs, c.prefix); err != nil {
 		return err
 	}
 
-	viper.SetConfigType("toml")
+	v := viper.New()
+	v.SetConfigType("toml")
 	configFS := c.fs
 	defaultConfig, err := fs.ReadFile(configFS, "configs/default.toml")
 	if err != nil {
 		return fmt.Errorf("failed to read the default configuration: %w", err)
 	}
-	if err := viper.ReadConfig(bytes.NewBuffer(defaultConfig)); err != nil {
+	if err := v.ReadConfig(bytes.NewBuffer(defaultConfig)); err != nil {
 		return fmt.Errorf("viper failed to read the default configuration: %w", err)
 	}
 
@@ -59,32 +65,49 @@ func (c *Context) Fill(config Config) error {
 	envConfig, err := fs.ReadFile(configFS, "configs/"+file)
 	if err == nil { // Env config may not exist.
 		// Merge environment-specific config
-		if err := viper.MergeConfig(bytes.NewBuffer(envConfig)); err != nil {
+		// WARNING: This will overwrite the secrets environment varibles!
+		if err := v.MergeConfig(bytes.NewBuffer(envConfig)); err != nil {
 			return fmt.Errorf("viper failed merging the configuration %s: %w", file, err)
 		}
 	}
 
-	if err := viper.Unmarshal(config); err != nil {
+	// Run envconfig one more time!
+	// This safely overlays the environment variables (like DB_PASSWORD) back on top
+	// of the TOML defaults, guaranteeing secrets are preserved.
+	if err := envUnmarshal(c.ctx, config, c.envs, c.prefix); err != nil {
+		return err
+	}
+
+	if err := v.Unmarshal(config); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	return nil
 }
 
-func envUnmarshal(ctx context.Context, config Config, envs map[string]string) error {
+func envUnmarshal(ctx context.Context, config Config, envs map[string]string, prefix string) error {
+	var baseLookuper envconfig.Lookuper
 	if envs == nil {
-		if err := envconfig.Process(ctx, config); err != nil {
-			return fmt.Errorf("envconfig process error: %w", err)
-		}
+		baseLookuper = envconfig.OsLookuper()
+	} else {
+		baseLookuper = envconfig.MapLookuper(envs)
+	}
 
-		return nil
+	lookuper := baseLookuper
+
+	if prefix != "" {
+		// THE FIX: MultiLookuper checks the prefixed version FIRST.
+		// If it's missing, it falls back to the exact same variable WITHOUT the prefix.
+		lookuper = envconfig.MultiLookuper(
+			envconfig.PrefixLookuper(prefix, baseLookuper),
+			baseLookuper,
+		)
 	}
 
 	if err := envconfig.ProcessWith(ctx, &envconfig.Config{
 		Target:   config,
-		Lookuper: envconfig.MapLookuper(envs),
+		Lookuper: lookuper,
 	}); err != nil {
-		// Do not expose `envs` because of secrets!
 		return fmt.Errorf("envconfig process error: %w", err)
 	}
 
