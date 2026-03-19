@@ -98,6 +98,7 @@ func IOTxtHandler(
 	return handler
 }
 
+// TODO: replace appEnv test to enum (json, txt, etc)
 func New(appEnv string, logLevel slog.Level) (*slog.Logger, error) {
 	if appEnv == "" {
 		return nil, eris.New("appEnv not set")
@@ -119,20 +120,16 @@ func New(appEnv string, logLevel slog.Level) (*slog.Logger, error) {
 		return a
 	}
 
-	var llogger *slog.Logger
 	if isProd {
 		handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			Level:       logLevel,
 			ReplaceAttr: replaceErr,
 		})
-		llogger = slog.New(handler)
-	} else {
-		// 1. Create your standard local text handler
-		baseHandler := StdoutTxtHandler(logLevel, replaceErr)
 
-		// 2. Wrap it with our post-print handler
-		llogger = slog.New(&erisPostPrintHandler{Handler: baseHandler})
+		return slog.New(handler), nil
 	}
 
-	return llogger, nil
+	baseHandler := StdoutTxtHandler(logLevel, replaceErr)
+
+	return slog.New(&erisPostPrintHandler{Handler: baseHandler}), nil
 }

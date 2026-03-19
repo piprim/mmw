@@ -3,13 +3,16 @@ package oglpgcli
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 
 	"github.com/fatih/color"
 	_ "github.com/lib/pq"
 	oglmigrator "github.com/ovya/ogl/db/migrator"
+	"github.com/pressly/goose/v3"
 	"github.com/rotisserie/eris"
 	"github.com/spf13/cobra"
 )
@@ -176,4 +179,33 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 	})
 
 	return migrateCmd
+}
+
+// Migrate create and execute the `NewMigrateCmd` command.
+func Migrate(dbURL string, migrationsFS fs.FS) error {
+	goose.SetLogger(&oglmigrator.FancyLogger{})
+	goose.SetDebug(true)
+	goose.SetSequential(true)
+
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		return fmt.Errorf("can not open database connection: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.PingContext(context.Background()); err != nil {
+		return fmt.Errorf("can ping database connection: %w", err)
+	}
+
+	options := []goose.OptionsFunc{
+		goose.WithAllowMissing(),
+	}
+
+	m := oglmigrator.New(db, migrationsFS, "scripts", options...)
+
+	if err := NewMigrateCmd(m).Execute(); err != nil {
+		return fmt.Errorf("failed to exceute migrate command: %w", err)
+	}
+
+	return nil
 }
