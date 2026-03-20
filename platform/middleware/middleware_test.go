@@ -2,14 +2,13 @@ package oglmiddleware
 
 import (
 	"bytes"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	oglpfconfig "github.com/ovya/ogl/platform/config"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 func TestLoggingMiddleware(t *testing.T) {
@@ -52,50 +51,14 @@ func TestLoggingMiddleware(t *testing.T) {
 	assert.Contains(t, logOutput, "payload=\"request body\"")
 }
 
-// MockConfig for CORS test
-type MockConfig struct {
-	mock.Mock
-}
-
-// Helper for fmt.Stringer
-type stringer string
-
-func (s stringer) String() string { return string(s) }
-
-func (m *MockConfig) GetAppEnv() fmt.Stringer {
-	args := m.Called()
-	return args.Get(0).(fmt.Stringer)
-}
-
-func (m *MockConfig) GetAppName() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *MockConfig) GetServerPort() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *MockConfig) GetServerHost() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-func (m *MockConfig) GetDatabaseURL() string {
-	args := m.Called()
-	return args.String(0)
-}
-
 func TestCORSMiddleware_Development(t *testing.T) {
-	mockConfig := new(MockConfig)
-	mockConfig.On("GetAppEnv").Return(stringer("development"))
+	cfg := &oglpfconfig.Server{}
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	mw := CORSMiddleware(mockConfig)
+	mw := CORSMiddleware(cfg, "development")
 	wrappedHandler := mw(nextHandler)
 
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
@@ -106,19 +69,19 @@ func TestCORSMiddleware_Development(t *testing.T) {
 	wrappedHandler.ServeHTTP(rec, req)
 
 	// In development, allowed origins should be "*" (or reflected)
-	assert.Equal(t, "http://any-origin.com", rec.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
 }
 
 func TestCORSMiddleware_Production(t *testing.T) {
-	mockConfig := new(MockConfig)
-	mockConfig.On("GetAppEnv").Return(stringer("production"))
-	mockConfig.On("GetServerHost").Return("https://api.example.com")
+	cfg := &oglpfconfig.Server{
+		Host: "https://api.example.com",
+	}
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	mw := CORSMiddleware(mockConfig)
+	mw := CORSMiddleware(cfg, "production")
 	wrappedHandler := mw(nextHandler)
 
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)

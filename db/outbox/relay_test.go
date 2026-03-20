@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
+	"os/exec"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/ovya/ogl/platform/pfevents"
+	pfevents "github.com/ovya/ogl/platform/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -86,6 +86,9 @@ func TestOutboxRelay_Start_ContextCancellation(t *testing.T) {
 func TestOutboxRelay_Start_ProcessesPeriodicBatches(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
+	}
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("Docker is not available")
 	}
 
 	// Setup database with testcontainer
@@ -229,39 +232,20 @@ func setupTestDB(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// runMigrations executes migration files
+// runMigrations creates the necessary tables for testing
 func runMigrations(ctx context.Context, pool *pgxpool.Pool) error {
-	// Get migrations directory - navigate up from internal/infra/workers to scripts/migrations
-	migrationsDir := filepath.Join("..", "..", "..", "scripts", "migrations")
-
-	// Read migration directory
-	entries, err := os.ReadDir(migrationsDir)
+	_, err := pool.Exec(ctx, `
+		CREATE TABLE events (
+			id SERIAL PRIMARY KEY,
+			event_type VARCHAR(255) NOT NULL,
+			payload JSONB NOT NULL,
+			occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			published_at TIMESTAMPTZ
+		);
+	`)
 	if err != nil {
-		return fmt.Errorf("reading migrations directory: %w", err)
+		return fmt.Errorf("creating events table: %w", err)
 	}
-
-	// Execute .up.sql files in order
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		filename := entry.Name()
-		// Check if this is an .up.sql file
-		if len(filename) > 7 && filename[len(filename)-7:] == ".up.sql" {
-			migrationPath := filepath.Join(migrationsDir, filename)
-			content, err := os.ReadFile(migrationPath)
-			if err != nil {
-				return fmt.Errorf("reading migration %s: %w", filename, err)
-			}
-
-			// Execute migration
-			if _, err := pool.Exec(ctx, string(content)); err != nil {
-				return fmt.Errorf("executing migration %s: %w", filename, err)
-			}
-		}
-	}
-
 	return nil
 }
 

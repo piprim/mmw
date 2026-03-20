@@ -90,9 +90,7 @@ func TestApp_Run(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	mod := new(MockModule)
-	mod.On("RegisterRoutes", mock.Anything).Return()
-	mod.On("StartWorkers", mock.Anything).Return(nil)
-	mod.On("Close").Return(nil)
+	mod.On("Start", mock.Anything).Return(nil)
 
 	app := New(logger, []oglcore.Module{mod})
 

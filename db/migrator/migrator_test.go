@@ -3,6 +3,7 @@ package oglmigrator
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -100,10 +101,13 @@ func TestMigrator_Create(t *testing.T) {
 		assert.FileExists(t, path)
 		assert.Contains(t, filepath.Base(path), "_add-default-user.go")
 
+		filename := filepath.Base(path)
+		timestamp := strings.Split(filename, "_")[0]
+
 		content, err := os.ReadFile(path)
 		assert.NoError(t, err)
-		assert.Contains(t, string(content), "func upAddDefaultUser")
-		assert.Contains(t, string(content), "func downAddDefaultUser")
+		assert.Contains(t, string(content), "func up"+timestamp)
+		assert.Contains(t, string(content), "func down"+timestamp)
 	})
 
 	t.Run("Create with invalid description", func(t *testing.T) {

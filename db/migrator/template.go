@@ -50,14 +50,14 @@ func renderSQLTemplate() (string, error) {
 }
 
 // renderGoTemplate renders the Go migration template with the given description.
-func renderGoTemplate(description string) (string, error) {
+func renderGoTemplate(id string) (string, error) {
 	tmpl, err := template.New("migration").Parse(goMigrationTemplate)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %w", err)
 	}
 
 	data := map[string]string{
-		"CamelCase": toCamelCase(description),
+		"CamelCase": toCamelCase(id),
 	}
 
 	var buf bytes.Buffer

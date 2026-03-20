@@ -61,7 +61,7 @@ name = "poc"
 
 	t.Run("empty environment variables map", func(t *testing.T) {
 		envs := map[string]string{}
-		configCtx := NewContext(ctx, mockFS, envs)
+		configCtx := NewContext(ctx, "", mockFS, envs)
 		config := &TestConfig{}
 		err := configCtx.Fill(config)
 		assert.Error(t, err, "Fill() should return error when required environment variables are missing")
@@ -71,7 +71,7 @@ name = "poc"
 		envs := map[string]string{
 			"DB_PASSWORD": "test_password",
 		}
-		configCtx := NewContext(ctx, mockFS, envs)
+		configCtx := NewContext(ctx, "", mockFS, envs)
 		config := &TestConfig{}
 		err := configCtx.Fill(config)
 		assert.Error(t, err, "Fill() should return error when APP_ENV is missing")
@@ -81,7 +81,7 @@ name = "poc"
 		envs := map[string]string{
 			"APP_ENV": "test",
 		}
-		configCtx := NewContext(ctx, mockFS, envs)
+		configCtx := NewContext(ctx, "", mockFS, envs)
 		config := &TestConfig{}
 		err := configCtx.Fill(config)
 		assert.Error(t, err, "Fill() should return error when DB_PASSWORD is missing")
@@ -112,7 +112,7 @@ name = "poc"
 	}
 
 	config := &TestConfig{}
-	err := NewContext(ctx, mockFS, envs).Fill(config)
+	err := NewContext(ctx, "", mockFS, envs).Fill(config)
 
 	require.NoError(t, err, "Fill() should not return error with valid environment variables")
 	require.NotNil(t, config.Database, "Config should have non-nil Database")
@@ -153,7 +153,7 @@ name = "poc"
 		"APP_ENV":     "nonexistent_env",
 	}
 
-	configCtx := NewContext(ctx, mockFS, envs)
+	configCtx := NewContext(ctx, "", mockFS, envs)
 	config := &TestConfig{}
 	err := configCtx.Fill(config)
 
@@ -181,7 +181,7 @@ name = "poc"
 	}
 
 	// When envs is nil, Fill should use actual OS environment variables
-	configCtx := NewContext(ctx, mockFS, nil)
+	configCtx := NewContext(ctx, "", mockFS, nil)
 	config := &TestConfig{}
 	err := configCtx.Fill(config)
 
@@ -205,7 +205,7 @@ func TestEnvUnmarshal(t *testing.T) {
 			"APP_ENV":     "production",
 		}
 
-		err := envUnmarshal(ctx, config, envs)
+		err := envUnmarshal(ctx, config, envs, "")
 		require.NoError(t, err, "envUnmarshal() should not return error with valid envs map")
 
 		assert.Equal(t, "production", config.Environment, "Environment should be set from envs map")
@@ -216,7 +216,7 @@ func TestEnvUnmarshal(t *testing.T) {
 		config := &TestConfig{}
 
 		// This will likely fail since OS env vars aren't set, but shouldn't panic
-		err := envUnmarshal(ctx, config, nil)
+		err := envUnmarshal(ctx, config, nil, "")
 		if err != nil {
 			t.Logf("envUnmarshal() with nil envs failed as expected: %v", err)
 		}
@@ -262,7 +262,7 @@ name = "poc"
 	require.NoError(t, err, "os.Setenv should not fail")
 
 	// Fill config with nil envs to use OS environment
-	configCtx := NewContext(ctx, mockFS, nil)
+	configCtx := NewContext(ctx, "", mockFS, nil)
 	config := &TestConfig{}
 	err = configCtx.Fill(config)
 
@@ -315,7 +315,7 @@ name = "testdb"
 		"APP_ENV":     "testing", // Environment name
 	}
 
-	configCtx := NewContext(ctx, mockFS, envs)
+	configCtx := NewContext(ctx, "", mockFS, envs)
 	config := new(TestConfig)
 	err := configCtx.Fill(config)
 
@@ -365,7 +365,7 @@ host = "partial.example.com"
 		"APP_ENV":     "staging", // Environment name
 	}
 
-	configCtx := NewContext(ctx, mockFS, envs)
+	configCtx := NewContext(ctx, "", mockFS, envs)
 	config := &TestConfig{}
 	err := configCtx.Fill(config)
 
@@ -425,7 +425,7 @@ name = "poc"
 	os.Unsetenv("APP_ENV")
 
 	// Fill config with nil envs should fail
-	configCtx := NewContext(ctx, mockFS, nil)
+	configCtx := NewContext(ctx, "", mockFS, nil)
 	config := &TestConfig{}
 	err := configCtx.Fill(config)
 
@@ -445,7 +445,7 @@ func TestContext_Fill_MissingDefaultConfig(t *testing.T) {
 		"APP_ENV":     "default",
 	}
 
-	configCtx := NewContext(ctx, mockFS, envs)
+	configCtx := NewContext(ctx, "", mockFS, envs)
 	config := &TestConfig{}
 	err := configCtx.Fill(config)
 
@@ -476,7 +476,7 @@ name = "poc"
 		"APP_ENV":     "production", // Environment, not app name
 	}
 
-	configCtx := NewContext(ctx, mockFS, envs)
+	configCtx := NewContext(ctx, "", mockFS, envs)
 	config := &TestConfig{}
 	err := configCtx.Fill(config)
 
@@ -506,7 +506,7 @@ name = "poc"
 		"APP_ENV":     "development",
 	}
 
-	configCtx := NewContext(ctx, mockFS, envs)
+	configCtx := NewContext(ctx, "", mockFS, envs)
 	config := &TestConfig{}
 	err := configCtx.Fill(config)
 
@@ -541,7 +541,7 @@ name = "poc"
 		"APP_ENV":     "production", // This is the environment name
 	}
 
-	configCtx := NewContext(ctx, mockFS, envs)
+	configCtx := NewContext(ctx, "", mockFS, envs)
 	config := &TestConfig{}
 	err := configCtx.Fill(config)
 
@@ -573,7 +573,7 @@ name = "poc"
 		"APP_ENV":     "staging",
 	}
 
-	configCtx := NewContext(ctx, mockFS, envs)
+	configCtx := NewContext(ctx, "", mockFS, envs)
 	config := &TestConfig{}
 	err := configCtx.Fill(config)
 

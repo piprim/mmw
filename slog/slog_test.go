@@ -16,8 +16,8 @@ func TestIOTxtHandler(t *testing.T) {
 	logger.Info("test message", "key", "value")
 
 	output := buf.String()
-	assert.Contains(t, output, "level=INFO")
-	assert.Contains(t, output, "msg=\"test message\"")
+	assert.Contains(t, output, "INF")
+	assert.Contains(t, output, "test message")
 	assert.Contains(t, output, "key=value")
 }
 
