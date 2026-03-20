@@ -187,7 +187,7 @@ func GetFdName(fd uintptr) (name string, err error) {
 	path := "/proc/self/fd/" + strconv.FormatUint(uint64(fd), 10)
 
 	var fi os.FileInfo
-	//nolint:gosec // G703: Path is restricted to /proc/self/fd/ and fd is a validated integer
+
 	if fi, err = os.Lstat(path); err != nil {
 		return
 	}

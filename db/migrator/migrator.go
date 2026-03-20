@@ -23,27 +23,34 @@ const (
 
 // Migrator handles database migrations independent of the CLI
 type Migrator struct {
-	db       *sql.DB
-	fs       fs.FS
-	dir      string
-	optionsF []goose.OptionsFunc
+	db        *sql.DB
+	fs        fs.FS
+	dir       string
+	tableName string
+	optionsF  []goose.OptionsFunc
 }
 
 // New creates a new Migrator.
 // Pass os.DirFS(dir) for local development, or your embedded fs.FS for production.
-func New(db *sql.DB, fsys fs.FS, dir string, optionsF ...goose.OptionsFunc) *Migrator {
+// tableName is the schema-qualified table used to track migration versions (e.g. "auth.goose_db_version").
+// Using a per-service schema-qualified name prevents version collisions when multiple services
+// share the same database.
+func New(db *sql.DB, fsys fs.FS, dir, tableName string, optionsF ...goose.OptionsFunc) *Migrator {
 	// Set goose to use the provided file system
 	goose.SetBaseFS(fsys)
 
 	return &Migrator{
-		db:       db,
-		fs:       fsys,
-		dir:      dir,
-		optionsF: optionsF,
+		db:        db,
+		fs:        fsys,
+		dir:       dir,
+		tableName: tableName,
+		optionsF:  optionsF,
 	}
 }
 
 func (m *Migrator) Up(ctx context.Context) (int64, error) {
+	goose.SetTableName(m.tableName)
+
 	if err := goose.UpContext(ctx, m.db, m.dir, m.optionsF...); err != nil {
 		return 0, fmt.Errorf("%w", err)
 	}
@@ -57,6 +64,8 @@ func (m *Migrator) Up(ctx context.Context) (int64, error) {
 }
 
 func (m *Migrator) Down(ctx context.Context) (int64, error) {
+	goose.SetTableName(m.tableName)
+
 	if err := goose.DownContext(ctx, m.db, m.dir); err != nil {
 		return 0, fmt.Errorf("%w", err)
 	}
@@ -70,6 +79,8 @@ func (m *Migrator) Down(ctx context.Context) (int64, error) {
 }
 
 func (m *Migrator) Fix(ctx context.Context) (int64, error) {
+	goose.SetTableName(m.tableName)
+
 	if err := goose.Fix(m.dir); err != nil {
 		return 0, fmt.Errorf("%w", err)
 	}
@@ -83,6 +94,8 @@ func (m *Migrator) Fix(ctx context.Context) (int64, error) {
 }
 
 func (m *Migrator) Reset(ctx context.Context) (int64, error) {
+	goose.SetTableName(m.tableName)
+
 	if err := goose.Reset(m.db, m.dir, m.optionsF...); err != nil {
 		return 0, fmt.Errorf("%w", err)
 	}
@@ -96,6 +109,8 @@ func (m *Migrator) Reset(ctx context.Context) (int64, error) {
 }
 
 func (m *Migrator) Status(ctx context.Context) error {
+	goose.SetTableName(m.tableName)
+
 	if err := goose.StatusContext(ctx, m.db, m.dir); err != nil {
 		return fmt.Errorf("%w", err)
 	}
@@ -104,6 +119,8 @@ func (m *Migrator) Status(ctx context.Context) error {
 }
 
 func (m *Migrator) Version(ctx context.Context) (int64, error) {
+	goose.SetTableName(m.tableName)
+
 	i, err := goose.GetDBVersionContext(ctx, m.db)
 	if err != nil {
 		return 0, fmt.Errorf("%w", err)

@@ -182,7 +182,11 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 }
 
 // Migrate create and execute the `NewMigrateCmd` command.
-func Migrate(dbURL string, migrationsFS fs.FS) error {
+// schemaName is the PostgreSQL schema that owns this service's migrations
+// (e.g. "auth", "todo"). The goose version table is created inside that schema
+// as "<schemaName>.goose_db_version", preventing version collisions when
+// multiple services share the same database.
+func Migrate(dbURL, schemaName string, migrationsFS fs.FS) error {
 	goose.SetLogger(&oglmigrator.FancyLogger{})
 	goose.SetDebug(true)
 	goose.SetSequential(true)
@@ -197,11 +201,21 @@ func Migrate(dbURL string, migrationsFS fs.FS) error {
 		return fmt.Errorf("can ping database connection: %w", err)
 	}
 
+	// The schema must exist before goose can create its version-tracking table
+	// inside it. Migrations themselves also create the schema (CREATE SCHEMA IF
+	// NOT EXISTS), so this is intentionally idempotent.
+	if _, err := db.ExecContext(context.Background(),
+		fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", schemaName),
+	); err != nil {
+		return fmt.Errorf("can not create schema %s: %w", schemaName, err)
+	}
+
 	options := []goose.OptionsFunc{
 		goose.WithAllowMissing(),
 	}
 
-	m := oglmigrator.New(db, migrationsFS, "scripts", options...)
+	tableName := schemaName + ".goose_db_version"
+	m := oglmigrator.New(db, migrationsFS, "scripts", tableName, options...)
 
 	if err := NewMigrateCmd(m).Execute(); err != nil {
 		return fmt.Errorf("failed to exceute migrate command: %w", err)
