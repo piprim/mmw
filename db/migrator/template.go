@@ -8,13 +8,13 @@ import (
 
 const sqlMigrationTemplate = `-- +goose Up
 -- +goose StatementBegin
--- TODO: Add your schema changes here
+-- ** ADD YOUR SCHEMA CHANGES HERE **
 
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
--- TODO: Add rollback logic here
+-- ** ADD ROLLBACK LOGIC HERE **
 
 -- +goose StatementEnd
 `

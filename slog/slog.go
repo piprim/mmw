@@ -98,29 +98,28 @@ func IOTxtHandler(
 	return handler
 }
 
+type HandlerType int
+
+const (
+	HandlerJson HandlerType = iota
+	HandlerText
+)
+
 // TODO: replace appEnv by an format type (enum json, txt, etc)
-func New(appEnv string, logLevel slog.Level) (*slog.Logger, error) {
-	if appEnv == "" {
-		return nil, eris.New("appEnv not set")
-	}
-
-	isProd := appEnv == "production"
-
+func New(handlerType HandlerType, logLevel slog.Level) (*slog.Logger, error) {
 	replaceErr := func(_ []string, a slog.Attr) slog.Attr {
 		if err, isError := a.Value.Any().(error); isError {
-			if isProd {
-				// Production: Output full structured JSON
+			if handlerType == HandlerJson {
 				return slog.Any(a.Key, eris.ToJSON(err, true))
 			}
-			// Local: Keep the log line clean with just the standard error message.
-			// The wrapper will handle printing the stack trace below!
+
 			return slog.String(a.Key, err.Error())
 		}
 
 		return a
 	}
 
-	if isProd {
+	if handlerType == HandlerJson {
 		handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			Level:       logLevel,
 			ReplaceAttr: replaceErr,
@@ -128,6 +127,7 @@ func New(appEnv string, logLevel slog.Level) (*slog.Logger, error) {
 
 		return slog.New(handler), nil
 	}
+
 	baseHandler := StdoutTxtHandler(logLevel, replaceErr)
 
 	return slog.New(&erisPostPrintHandler{Handler: baseHandler}), nil
