@@ -10,16 +10,12 @@ import (
 )
 
 // CORSMiddleware adds CORS support for Connect, gRPC, and gRPC-Web
-func CORSMiddleware(cfg *oglpfconfig.Server, environment string) Middleware {
-	var allowed []string
+func CORSMiddleware(cfg *oglpfconfig.Server) Middleware {
+	// Strict host if nothing is provided
+	allowed := []string{cfg.Host}
 
-	if environment == "development" {
-		allowed = []string{"*"}
-	} else if len(cfg.AllowedOrigins) > 0 {
+	if len(cfg.AllowedOrigins) > 0 {
 		allowed = cfg.AllowedOrigins
-	} else {
-		// Fallback to strict host if nothing is provided
-		allowed = []string{cfg.Host}
 	}
 
 	c := cors.New(cors.Options{
