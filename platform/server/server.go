@@ -115,7 +115,7 @@ func getMonitMessages(fns HealthFns) (msgs map[string]any, hasErr bool) {
 	if hasErr {
 		hm = 0
 	}
-	msgs["happiness-message"] = hm
+	msgs["health"] = hm
 
 	return
 }
@@ -125,11 +125,6 @@ func writeProcessInfo(w io.Writer) {
 		encoder := json.NewEncoder(w)
 		encoder.SetIndent("", "  ") // Pretty-print
 		_ = encoder.Encode(bi)
-		// fmt.Printf("Version: %s\n", bi.Main.Version)
-		// fmt.Printf("Go Version: %s\n", bi.GoVersion)
-		// fmt.Printf("Git Revision: %s\n", bi.Settings["vcs.revision"])
-		// fmt.Printf("Build Time: %s\n", bi.Settings["vcs.time"])
-		// fmt.Fprintf(w, `{"pid": "%d"}`, os.Getpid())
 	}
 }
 

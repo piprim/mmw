@@ -1,4 +1,4 @@
-package oglconfig
+package oglslog
 
 import "log/slog"
 

@@ -21,14 +21,14 @@ type erisPostPrintHandler struct {
 
 //nolint:gocritic // because it implements slog.Handle interface
 func (h *erisPostPrintHandler) Handle(ctx context.Context, r slog.Record) error {
-	// 1. Call the underlying handler FIRST. This prints your standard log line.
+	// Call the underlying handler FIRST. This prints the standard log line.
 	err := h.Handler.Handle(ctx, r)
 
 	if err != nil {
 		return fmt.Errorf("eris post Print handler fails: %w", err)
 	}
 
-	// 2. Scan the record's attributes for any errors.
+	// Scan the record's attributes for any errors.
 	r.Attrs(func(a slog.Attr) bool {
 		if e, isError := a.Value.Any().(error); isError {
 			// Print the detailed stack trace beautifully below the log line
@@ -105,7 +105,6 @@ const (
 	HandlerText
 )
 
-// TODO: replace appEnv by an format type (enum json, txt, etc)
 func New(handlerType HandlerType, logLevel slog.Level) (*slog.Logger, error) {
 	replaceErr := func(_ []string, a slog.Attr) slog.Attr {
 		if err, isError := a.Value.Any().(error); isError {

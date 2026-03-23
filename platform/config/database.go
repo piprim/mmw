@@ -17,15 +17,22 @@ type Database struct {
 }
 
 func (d *Database) URL() string {
+	scheme := d.Scheme
+	if scheme == "" {
+		scheme = "postgres"
+	}
+
 	u := &url.URL{
-		Scheme: d.Scheme,
+		Scheme: scheme,
 		Host:   fmt.Sprintf("%s%s", d.Host, d.Port.String()),
 		Path:   d.Name,
 	}
 
-	q := u.Query()
-	q.Add("sslmode", d.SSLMode)
-	u.RawQuery = q.Encode()
+	if d.SSLMode != "" {
+		q := u.Query()
+		q.Add("sslmode", d.SSLMode)
+		u.RawQuery = q.Encode()
+	}
 
 	if d.User != "" {
 		if d.Password != "" {
