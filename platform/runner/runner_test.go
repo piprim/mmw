@@ -92,7 +92,7 @@ func TestApp_Run(t *testing.T) {
 	mod := new(MockModule)
 	mod.On("Start", mock.Anything).Return(nil)
 
-	app := New(logger, []oglcore.App{mod})
+	app := New(logger, []oglcore.Module{mod})
 
 	// Run
 	ctx, cancel := context.WithCancel(context.Background())

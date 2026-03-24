@@ -11,10 +11,10 @@ import (
 
 type App struct {
 	logger  *slog.Logger
-	modules []oglcore.App
+	modules []oglcore.Module
 }
 
-func New(logger *slog.Logger, modules []oglcore.App) *App {
+func New(logger *slog.Logger, modules []oglcore.Module) *App {
 	return &App{logger: logger, modules: modules}
 }
 
