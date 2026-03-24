@@ -1,4 +1,4 @@
-package oglrunner
+package platform
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package oglplatform
+package platform
 
 import (
 	"context"
