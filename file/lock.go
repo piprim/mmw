@@ -13,11 +13,9 @@ const (
 	fdLimit = 1024
 )
 
-var (
-	// ErrWouldBlock indicates that a file is locked by another process.
-	// This error is returned by Lock() when attempting to acquire an already-held lock.
-	ErrWouldBlock = syscall.EWOULDBLOCK
-)
+// ErrWouldBlock indicates that a file is locked by another process.
+// This error is returned by Lock() when attempting to acquire an already-held lock.
+var ErrWouldBlock = syscall.EWOULDBLOCK
 
 // LockFile wraps *os.File and provide functions for locking of files.
 type LockFile struct {
@@ -29,9 +27,7 @@ func NewLockFile(file *os.File) *LockFile {
 	return &LockFile{file}
 }
 
-var (
-	defaultPIDPermsNum = 0664
-)
+var defaultPIDPermsNum = 0o664
 
 // SaveCurrentPID Writes a pid file, but first make sure it doesn't exist with a running pid.
 // https://gist.github.com/davidnewhall/3627895a9fc8fa0affbd747183abca39
@@ -181,7 +177,6 @@ func (file *LockFile) Remove() error {
 		}
 
 		err = syscall.Unlink(name)
-
 		if err != nil {
 			return fmt.Errorf("unlinking file '%s' failed: %w", name, err)
 		}

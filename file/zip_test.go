@@ -19,7 +19,7 @@ func TestAddFileToZip(t *testing.T) {
 
 		testContent := []byte("test file content")
 		testFilePath := filepath.Join(tmpDir, "testfile.txt")
-		err = os.WriteFile(testFilePath, testContent, 0644)
+		err = os.WriteFile(testFilePath, testContent, 0o644)
 		if err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
@@ -119,7 +119,7 @@ func TestAddFileToZip(t *testing.T) {
 		var filePaths []string
 		for name, content := range files {
 			path := filepath.Join(tmpDir, name)
-			err = os.WriteFile(path, content, 0644)
+			err = os.WriteFile(path, content, 0o644)
 			if err != nil {
 				t.Fatalf("failed to write test file: %v", err)
 			}
@@ -171,7 +171,7 @@ func TestAddFileToZip(t *testing.T) {
 		}
 
 		testFilePath := filepath.Join(tmpDir, "binary.dat")
-		err = os.WriteFile(testFilePath, binaryContent, 0644)
+		err = os.WriteFile(testFilePath, binaryContent, 0o644)
 		if err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
@@ -224,7 +224,7 @@ func TestAddFileToZip(t *testing.T) {
 		defer os.RemoveAll(tmpDir)
 
 		testFilePath := filepath.Join(tmpDir, "test.txt")
-		err = os.WriteFile(testFilePath, []byte("test content"), 0644)
+		err = os.WriteFile(testFilePath, []byte("test content"), 0o644)
 		if err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
@@ -267,7 +267,7 @@ func TestZipFiles(t *testing.T) {
 
 		testContent := []byte("test content for zip")
 		testFilePath := filepath.Join(tmpDir, "test.txt")
-		err = os.WriteFile(testFilePath, testContent, 0644)
+		err = os.WriteFile(testFilePath, testContent, 0o644)
 		if err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
@@ -330,7 +330,7 @@ func TestZipFiles(t *testing.T) {
 		var filePaths []string
 		for name, content := range files {
 			path := filepath.Join(tmpDir, name)
-			err = os.WriteFile(path, content, 0644)
+			err = os.WriteFile(path, content, 0o644)
 			if err != nil {
 				t.Fatalf("failed to write test file: %v", err)
 			}
@@ -368,7 +368,7 @@ func TestZipFiles(t *testing.T) {
 		// Create source file
 		testContent := []byte("file content")
 		srcPath := filepath.Join(tmpDir, "source.txt")
-		err = os.WriteFile(srcPath, testContent, 0644)
+		err = os.WriteFile(srcPath, testContent, 0o644)
 		if err != nil {
 			t.Fatalf("failed to write source file: %v", err)
 		}
@@ -443,7 +443,7 @@ func TestZipFiles(t *testing.T) {
 		}
 
 		testFilePath := filepath.Join(tmpDir, "binary.dat")
-		err = os.WriteFile(testFilePath, binaryContent, 0644)
+		err = os.WriteFile(testFilePath, binaryContent, 0o644)
 		if err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}

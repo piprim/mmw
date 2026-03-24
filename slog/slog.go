@@ -23,7 +23,6 @@ type erisPostPrintHandler struct {
 func (h *erisPostPrintHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Call the underlying handler FIRST. This prints the standard log line.
 	err := h.Handler.Handle(ctx, r)
-
 	if err != nil {
 		return fmt.Errorf("eris post Print handler fails: %w", err)
 	}

@@ -204,7 +204,6 @@ name = "poc"
 	configCtx := NewContext(ctx, mockFS, "")
 	config := &TestConfig{}
 	err := configCtx.Fill(config)
-
 	// We can't reliably test this without manipulating OS environment
 	// Just verify the function handles missing env vars without panicking
 	if err != nil {

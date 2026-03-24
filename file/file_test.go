@@ -305,7 +305,7 @@ func TestCreateDirIfNotExists(t *testing.T) {
 		// Check that directory has expected permissions (0775)
 		// Note: actual permissions may be affected by umask
 		perm := info.Mode().Perm()
-		if perm&fs.FileMode(0700) != fs.FileMode(0700) {
+		if perm&fs.FileMode(0o700) != fs.FileMode(0o700) {
 			t.Errorf("directory does not have owner rwx permissions: %o", perm)
 		}
 	})

@@ -58,7 +58,7 @@ func CreateTargetDirIfNotExists(path string) (err error) {
 }
 
 var (
-	defaultPermsNum = 0775
+	defaultPermsNum = 0o775
 	defaultPerms    = fs.FileMode(defaultPermsNum)
 )
 

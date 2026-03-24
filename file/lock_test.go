@@ -35,7 +35,7 @@ func TestOpenLockFile(t *testing.T) {
 		tmpFile.Close()
 		defer os.Remove(tmpFile.Name())
 
-		lockFile, err := OpenLockFile(tmpFile.Name(), 0644)
+		lockFile, err := OpenLockFile(tmpFile.Name(), 0o644)
 		if err != nil {
 			t.Fatalf("OpenLockFile() returned error: %v", err)
 		}
@@ -54,7 +54,7 @@ func TestOpenLockFile(t *testing.T) {
 		defer os.RemoveAll(tmpDir)
 
 		newFile := filepath.Join(tmpDir, "newlock.pid")
-		lockFile, err := OpenLockFile(newFile, 0644)
+		lockFile, err := OpenLockFile(newFile, 0o644)
 		if err != nil {
 			t.Fatalf("OpenLockFile() returned error: %v", err)
 		}
@@ -66,7 +66,7 @@ func TestOpenLockFile(t *testing.T) {
 	})
 
 	t.Run("returns error for invalid path", func(t *testing.T) {
-		_, err := OpenLockFile("/nonexistent/dir/file.pid", 0644)
+		_, err := OpenLockFile("/nonexistent/dir/file.pid", 0o644)
 		if err == nil {
 			t.Error("OpenLockFile() should return error for invalid path")
 		}
@@ -82,7 +82,7 @@ func TestLockFile_LockUnlock(t *testing.T) {
 		defer os.RemoveAll(tmpDir)
 
 		lockPath := filepath.Join(tmpDir, "test.lock")
-		lockFile, err := OpenLockFile(lockPath, 0644)
+		lockFile, err := OpenLockFile(lockPath, 0o644)
 		if err != nil {
 			t.Fatalf("OpenLockFile() returned error: %v", err)
 		}
@@ -111,7 +111,7 @@ func TestLockFile_LockUnlock(t *testing.T) {
 		lockPath := filepath.Join(tmpDir, "test.lock")
 
 		// First lock
-		lockFile1, err := OpenLockFile(lockPath, 0644)
+		lockFile1, err := OpenLockFile(lockPath, 0o644)
 		if err != nil {
 			t.Fatalf("OpenLockFile() returned error: %v", err)
 		}
@@ -123,7 +123,7 @@ func TestLockFile_LockUnlock(t *testing.T) {
 		}
 
 		// Second lock should fail (non-blocking)
-		lockFile2, err := OpenLockFile(lockPath, 0644)
+		lockFile2, err := OpenLockFile(lockPath, 0o644)
 		if err != nil {
 			t.Fatalf("second OpenLockFile() returned error: %v", err)
 		}
@@ -148,7 +148,7 @@ func TestLockFile_WritePid(t *testing.T) {
 		defer os.RemoveAll(tmpDir)
 
 		pidPath := filepath.Join(tmpDir, "test.pid")
-		lockFile, err := OpenLockFile(pidPath, 0644)
+		lockFile, err := OpenLockFile(pidPath, 0o644)
 		if err != nil {
 			t.Fatalf("OpenLockFile() returned error: %v", err)
 		}
@@ -181,12 +181,12 @@ func TestLockFile_WritePid(t *testing.T) {
 		pidPath := filepath.Join(tmpDir, "test.pid")
 
 		// Write initial content
-		err = os.WriteFile(pidPath, []byte("999999999"), 0644)
+		err = os.WriteFile(pidPath, []byte("999999999"), 0o644)
 		if err != nil {
 			t.Fatalf("failed to write initial content: %v", err)
 		}
 
-		lockFile, err := OpenLockFile(pidPath, 0644)
+		lockFile, err := OpenLockFile(pidPath, 0o644)
 		if err != nil {
 			t.Fatalf("OpenLockFile() returned error: %v", err)
 		}
@@ -222,12 +222,12 @@ func TestLockFile_ReadPid(t *testing.T) {
 		expectedPid := 12345
 
 		// Write a pid to the file
-		err = os.WriteFile(pidPath, []byte(strconv.Itoa(expectedPid)), 0644)
+		err = os.WriteFile(pidPath, []byte(strconv.Itoa(expectedPid)), 0o644)
 		if err != nil {
 			t.Fatalf("failed to write pid file: %v", err)
 		}
 
-		lockFile, err := OpenLockFile(pidPath, 0644)
+		lockFile, err := OpenLockFile(pidPath, 0o644)
 		if err != nil {
 			t.Fatalf("OpenLockFile() returned error: %v", err)
 		}
@@ -253,12 +253,12 @@ func TestLockFile_ReadPid(t *testing.T) {
 		pidPath := filepath.Join(tmpDir, "test.pid")
 
 		// Create empty file
-		err = os.WriteFile(pidPath, []byte{}, 0644)
+		err = os.WriteFile(pidPath, []byte{}, 0o644)
 		if err != nil {
 			t.Fatalf("failed to create empty file: %v", err)
 		}
 
-		lockFile, err := OpenLockFile(pidPath, 0644)
+		lockFile, err := OpenLockFile(pidPath, 0o644)
 		if err != nil {
 			t.Fatalf("OpenLockFile() returned error: %v", err)
 		}
@@ -280,12 +280,12 @@ func TestLockFile_ReadPid(t *testing.T) {
 		pidPath := filepath.Join(tmpDir, "test.pid")
 
 		// Write non-numeric content
-		err = os.WriteFile(pidPath, []byte("not-a-pid"), 0644)
+		err = os.WriteFile(pidPath, []byte("not-a-pid"), 0o644)
 		if err != nil {
 			t.Fatalf("failed to write file: %v", err)
 		}
 
-		lockFile, err := OpenLockFile(pidPath, 0644)
+		lockFile, err := OpenLockFile(pidPath, 0o644)
 		if err != nil {
 			t.Fatalf("OpenLockFile() returned error: %v", err)
 		}
@@ -309,7 +309,7 @@ func TestReadPidFile(t *testing.T) {
 		pidPath := filepath.Join(tmpDir, "test.pid")
 		expectedPid := 54321
 
-		err = os.WriteFile(pidPath, []byte(strconv.Itoa(expectedPid)), 0644)
+		err = os.WriteFile(pidPath, []byte(strconv.Itoa(expectedPid)), 0o644)
 		if err != nil {
 			t.Fatalf("failed to write pid file: %v", err)
 		}
@@ -341,7 +341,7 @@ func TestCreatePidFile(t *testing.T) {
 		defer os.RemoveAll(tmpDir)
 
 		pidPath := filepath.Join(tmpDir, "test.pid")
-		lockFile, err := CreatePidFile(pidPath, 0644)
+		lockFile, err := CreatePidFile(pidPath, 0o644)
 		if err != nil {
 			t.Fatalf("CreatePidFile() returned error: %v", err)
 		}
@@ -364,7 +364,7 @@ func TestCreatePidFile(t *testing.T) {
 		}
 
 		// Verify file is locked (second lock should fail)
-		lockFile2, err := OpenLockFile(pidPath, 0644)
+		lockFile2, err := OpenLockFile(pidPath, 0o644)
 		if err != nil {
 			t.Fatalf("OpenLockFile() returned error: %v", err)
 		}
@@ -377,7 +377,7 @@ func TestCreatePidFile(t *testing.T) {
 	})
 
 	t.Run("returns error for invalid path", func(t *testing.T) {
-		_, err := CreatePidFile("/nonexistent/dir/test.pid", 0644)
+		_, err := CreatePidFile("/nonexistent/dir/test.pid", 0o644)
 		if err == nil {
 			t.Error("CreatePidFile() should return error for invalid path")
 		}
@@ -393,7 +393,7 @@ func TestLockFile_Remove(t *testing.T) {
 		defer os.RemoveAll(tmpDir)
 
 		pidPath := filepath.Join(tmpDir, "test.pid")
-		lockFile, err := CreatePidFile(pidPath, 0644)
+		lockFile, err := CreatePidFile(pidPath, 0o644)
 		if err != nil {
 			t.Fatalf("CreatePidFile() returned error: %v", err)
 		}

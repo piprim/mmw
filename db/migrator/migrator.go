@@ -161,7 +161,7 @@ func (m *Migrator) Create(targetDir, description string, mType MigrationType) (s
 	filePath := filepath.Join(targetDir, filename)
 
 	// Ensure directory exists
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create migrations directory: %w", err)
 	}
 
@@ -177,7 +177,7 @@ func (m *Migrator) Create(targetDir, description string, mType MigrationType) (s
 	}
 
 	//
-	if err := os.WriteFile(filePath, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(filePath, []byte(content), 0o600); err != nil {
 		return "", fmt.Errorf("failed to write migration file: %w", err)
 	}
 
