@@ -1,4 +1,4 @@
-package ogluow
+package uow
 
 import (
 	"context"
@@ -12,8 +12,11 @@ import (
 // DBExecutor abstracts both *pgxpool.Pool and pgx.Tx
 // Every service's repository will use this.
 type DBExecutor interface {
+	// Exec executes a query without returning rows.
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	// Query executes a query that returns rows.
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	// QueryRow executes a query that is expected to return at most one row.
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 
 	// SendBatch to support bulk operations safely

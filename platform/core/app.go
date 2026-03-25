@@ -1,4 +1,4 @@
-package oglcore
+package core
 
 import (
 	"context"

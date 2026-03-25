@@ -1,4 +1,4 @@
-package oglfile
+package file
 
 import (
 	"errors"
@@ -36,25 +36,24 @@ func ensureNotEmpty(s string) (err error) {
 		err = errors.New("empty string given")
 	}
 
-	return
+	return err
 }
 
 // CreateTargetDirIfNotExists ensures that the target directory
 // of the file/directory exists, creating it if it does not exist.
 // If "path" ends by a slash it's
 // considering as a directory, else it's a file
-func CreateTargetDirIfNotExists(path string) (err error) {
-	if err = ensureNotEmpty(path); err != nil {
-		return
+func CreateTargetDirIfNotExists(path string) error {
+	if err := ensureNotEmpty(path); err != nil {
+		return err
 	}
 
+	lpath := path
 	if path[len(path)-1] != '/' {
-		path = filepath.Dir(path)
+		lpath = filepath.Dir(path)
 	}
 
-	err = CreateDirIfNotExists(path)
-
-	return
+	return CreateDirIfNotExists(lpath)
 }
 
 var (
@@ -64,16 +63,16 @@ var (
 
 // CreateDirIfNotExists ensures that the target directory
 // of the directory exists, creating it if it does not exist.
-func CreateDirIfNotExists(path string) (err error) {
-	if err = ensureNotEmpty(path); err != nil {
-		return
+func CreateDirIfNotExists(path string) error {
+	if err := ensureNotEmpty(path); err != nil {
+		return err
 	}
 
 	if !Exists(path) {
-		if err = os.MkdirAll(path, defaultPerms); err != nil {
-			return
+		if err := os.MkdirAll(path, defaultPerms); err != nil {
+			return fmt.Errorf("failed to create directory: %w", err)
 		}
 	}
 
-	return
+	return nil
 }

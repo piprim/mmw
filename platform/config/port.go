@@ -1,4 +1,4 @@
-package oglpfconfig
+package config
 
 import "strconv"
 

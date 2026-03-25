@@ -1,4 +1,4 @@
-package oglslog
+package slog
 
 import "log/slog"
 
@@ -9,14 +9,12 @@ func (l LogLevel) SlogLevel() slog.Level {
 	switch string(l) {
 	case "debug":
 		return slog.LevelDebug
-	case "info":
-		return slog.LevelInfo
 	case "warn":
 		return slog.LevelWarn
 	case "error":
 		return slog.LevelError
 	default:
-		return slog.LevelInfo // default to info
+		return slog.LevelInfo
 	}
 }
 

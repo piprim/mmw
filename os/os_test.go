@@ -1,4 +1,4 @@
-package oglos
+package os
 
 import (
 	"os"

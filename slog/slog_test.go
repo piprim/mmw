@@ -1,4 +1,4 @@
-package oglslog
+package slog
 
 import (
 	"bytes"

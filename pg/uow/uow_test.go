@@ -1,4 +1,4 @@
-package ogluow
+package uow
 
 import (
 	"context"

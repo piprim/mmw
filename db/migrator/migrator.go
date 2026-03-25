@@ -1,8 +1,9 @@
-package oglmigrator
+package migrator
 
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -130,7 +131,7 @@ func (m *Migrator) Version(ctx context.Context) (int64, error) {
 }
 
 // Create generates a new migration file. This strictly writes to the local disk.
-func (m *Migrator) Create(targetDir, description string, mType MigrationType) (string, error) {
+func (*Migrator) Create(targetDir, description string, mType MigrationType) (string, error) {
 	// Validate description
 	if err := ValidateDescription(description); err != nil {
 		return "", fmt.Errorf("migration description is not valid: %w", err)
@@ -194,11 +195,11 @@ func (m *Migrator) Create(targetDir, description string, mType MigrationType) (s
 // Returns error if description is invalid.
 func ValidateDescription(description string) error {
 	if description == "" {
-		return fmt.Errorf("description is required")
+		return errors.New("description is required")
 	}
 
 	if len(description) < 3 || len(description) > 100 {
-		return fmt.Errorf("description must be between 3 and 100 characters")
+		return errors.New("description must be between 3 and 100 characters")
 	}
 
 	return nil
@@ -208,11 +209,11 @@ func ValidateDescription(description string) error {
 // Handles dashes, underscores, and spaces as separators.
 func toCamelCase(s string) string {
 	// Replace dashes and underscores with spaces for uniform processing
-	s = strings.ReplaceAll(s, "-", " ")
-	s = strings.ReplaceAll(s, "_", " ")
+	v := strings.ReplaceAll(s, "-", " ")
+	v = strings.ReplaceAll(v, "_", " ")
 
 	// Split by spaces
-	words := strings.Fields(s)
+	words := strings.Fields(v)
 
 	// Capitalize first letter of each word
 	for i, word := range words {

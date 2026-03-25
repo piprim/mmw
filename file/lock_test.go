@@ -1,4 +1,4 @@
-package oglfile
+package file
 
 import (
 	"os"

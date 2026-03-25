@@ -1,4 +1,4 @@
-package oglconfig
+package config
 
 import (
 	"bytes"
@@ -30,6 +30,7 @@ type Context struct {
 // GetAppEnv returns the environment name (e.g., "production", "development")
 // which is used to load environment-specific configuration files.
 type Config interface {
+	// GetAppEnv return the app environment: development, production, staging, etc
 	GetAppEnv() fmt.Stringer
 }
 

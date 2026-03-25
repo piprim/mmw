@@ -1,4 +1,4 @@
-package oglstring
+package string
 
 import (
 	"errors"
@@ -70,12 +70,12 @@ func NormalizeFileName(name string) (string, error) {
 		return "", errors.New("empty name")
 	}
 
-	name, err := UnaccentString(name)
+	nameUnaccent, err := UnaccentString(name)
 	if err != nil {
 		return "", err
 	}
-	ext := filepath.Ext(name)
-	nameSExt := strings.TrimSuffix(name, ext)
+	ext := filepath.Ext(nameUnaccent)
+	nameSExt := strings.TrimSuffix(nameUnaccent, ext)
 	if nameSExt != "" {
 		nameSExt = strings.Trim(nameSExt, " ")
 		nameSExt = filepath.Clean(strings.ReplaceAll(nameSExt, "..", ""))

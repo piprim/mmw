@@ -1,4 +1,4 @@
-package oglconfig
+package config
 
 import (
 	"context"

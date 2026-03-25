@@ -1,4 +1,4 @@
-package ogldb
+package db
 
 import (
 	"testing"

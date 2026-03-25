@@ -1,4 +1,4 @@
-package oglconfig
+package config
 
 import (
 	"errors"
@@ -31,14 +31,14 @@ func EnvironmentValues() []Environment {
 }
 
 // String implements the Stringer interface.
-func (x Environment) String() string {
-	return string(x)
+func (e Environment) String() string {
+	return string(e)
 }
 
 // IsValid provides a quick way to determine if the typed value is
 // part of the allowed enumerated values
-func (x Environment) IsValid() bool {
-	_, err := ParseEnvironment(string(x))
+func (e Environment) IsValid() bool {
+	_, err := ParseEnvironment(string(e))
 	return err == nil
 }
 
@@ -59,17 +59,17 @@ func ParseEnvironment(name string) (Environment, error) {
 }
 
 // MarshalText implements the text marshaller method.
-func (x Environment) MarshalText() ([]byte, error) {
-	return []byte(string(x)), nil
+func (e Environment) MarshalText() ([]byte, error) {
+	return []byte(string(e)), nil
 }
 
 // UnmarshalText implements the text unmarshaller method.
-func (x *Environment) UnmarshalText(text []byte) error {
+func (e *Environment) UnmarshalText(text []byte) error {
 	tmp, err := ParseEnvironment(string(text))
 	if err != nil {
 		return err
 	}
-	*x = tmp
+	*e = tmp
 
 	return nil
 }
@@ -78,8 +78,8 @@ func (x *Environment) UnmarshalText(text []byte) error {
 // (allocating a larger slice if necessary) and returns the updated slice.
 //
 // Implementations must not retain b, nor mutate any bytes within b[:len(b)].
-func (x *Environment) AppendText(b []byte) ([]byte, error) {
-	return append(b, x.String()...), nil
+func (e *Environment) AppendText(b []byte) ([]byte, error) {
+	return append(b, e.String()...), nil
 }
 
 func (e Environment) IsDev() bool {

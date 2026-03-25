@@ -1,5 +1,5 @@
 // libs/ogl/platform/server/server.go
-package oglserver
+package server
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"runtime/debug"
 
 	oglpfconfig "github.com/ovya/ogl/platform/config"
-	oglmiddleware "github.com/ovya/ogl/platform/middleware"
+	"github.com/ovya/ogl/platform/middleware"
 	"github.com/rotisserie/eris"
 )
 
@@ -27,15 +27,16 @@ type HTTPServer struct {
 type HealthFns = map[string]func(context.Context) (any, error)
 
 type HTTPServerInfra struct {
-	Config      *oglpfconfig.Server
-	Handler     http.Handler
-	Logger      *slog.Logger
-	HealthFns   HealthFns
-	LogPayloads bool
+	Config          *oglpfconfig.Server
+	Handler         http.Handler
+	Logger          *slog.Logger
+	HealthFns       HealthFns
+	LogPayloads     bool
+	WithDebugRoutes bool
 }
 
 // NewHTTPServer creates a pre-configured server ready to be started.
-func NewHTTPServer2(withDebugRoutes bool, infra HTTPServerInfra) *HTTPServer {
+func NewHTTPServer(infra HTTPServerInfra) *HTTPServer {
 	infra.Config.SetDefaults()
 
 	addr := fmt.Sprintf("%s:%d", infra.Config.Host, infra.Config.Port)
@@ -58,7 +59,7 @@ func NewHTTPServer2(withDebugRoutes bool, infra HTTPServerInfra) *HTTPServer {
 		_ = json.NewEncoder(w).Encode(msgs)
 	})
 
-	if withDebugRoutes {
+	if infra.WithDebugRoutes {
 		mux.HandleFunc("GET /debug/info", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
@@ -75,9 +76,9 @@ func NewHTTPServer2(withDebugRoutes bool, infra HTTPServerInfra) *HTTPServer {
 	// All other requests go to the application handler.
 	mux.Handle("/", infra.Handler)
 
-	loggerMiddleware := oglmiddleware.LoggingMiddleware(infra.Logger, infra.LogPayloads)
-	recoveryMiddleware := oglmiddleware.RecoveryMiddleware(infra.Logger)
-	corsMiddleware := oglmiddleware.CORSMiddleware(infra.Config)
+	loggerMiddleware := middleware.LoggingMiddleware(infra.Logger, infra.LogPayloads)
+	recoveryMiddleware := middleware.RecoveryMiddleware(infra.Logger)
+	corsMiddleware := middleware.CORSMiddleware(infra.Config)
 
 	// Chain Middlewares (Execution order goes outside-in)
 	// Request -> Logger -> Recovery -> CORS -> Mux
@@ -100,7 +101,7 @@ func NewHTTPServer2(withDebugRoutes bool, infra HTTPServerInfra) *HTTPServer {
 }
 
 func getMonitMessages(fns HealthFns) (msgs map[string]any, hasErr bool) {
-	msgs = map[string]any{}
+	msgs = make(map[string]any)
 	ctx := context.Background()
 	var err error
 	for key, fn := range fns {
@@ -117,15 +118,17 @@ func getMonitMessages(fns HealthFns) (msgs map[string]any, hasErr bool) {
 	}
 	msgs["health"] = hm
 
-	return
+	return msgs, hasErr
 }
 
 func writeProcessInfo(w io.Writer) {
-	if bi, ok := debug.ReadBuildInfo(); ok {
-		encoder := json.NewEncoder(w)
-		encoder.SetIndent("", "  ") // Pretty-print
-		_ = encoder.Encode(bi)
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
 	}
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ") // Pretty-print
+	_ = encoder.Encode(bi)
 }
 
 // Start blocks until the context is canceled, then performs a graceful shutdown.

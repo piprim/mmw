@@ -1,4 +1,4 @@
-package oglpgcli
+package cli
 
 import (
 	"bufio"
@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // postgres driver registration required for goose sql-style migrations
 	oglmigrator "github.com/ovya/ogl/db/migrator"
 	"github.com/pressly/goose/v3"
 	"github.com/rotisserie/eris"
@@ -28,10 +28,21 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 		},
 	}
 
-	// Setup Migrator
 	ctx := context.Background()
 
-	migrateCmd.AddCommand(&cobra.Command{
+	migrateCmd.AddCommand(migrateUpCmd(ctx, m))
+	migrateCmd.AddCommand(migrateDownCmd(ctx, m))
+	migrateCmd.AddCommand(migrateVersionCmd(ctx, m))
+	migrateCmd.AddCommand(migrateCreateCmd(ctx, m))
+	migrateCmd.AddCommand(migrateStatusCmd(ctx, m))
+	migrateCmd.AddCommand(migrateFixCmd(ctx, m))
+	migrateCmd.AddCommand(migrateResetCmd(ctx, m))
+
+	return migrateCmd
+}
+
+func migrateUpCmd(ctx context.Context, m *oglmigrator.Migrator) *cobra.Command {
+	return &cobra.Command{
 		Use:   "up",
 		Short: "Run all pending migrations",
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -42,9 +53,11 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 
 			return nil
 		},
-	})
+	}
+}
 
-	migrateCmd.AddCommand(&cobra.Command{
+func migrateDownCmd(ctx context.Context, m *oglmigrator.Migrator) *cobra.Command {
+	return &cobra.Command{
 		Use:   "down",
 		Short: "Rollback the last migration",
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -55,9 +68,11 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 
 			return nil
 		},
-	})
+	}
+}
 
-	migrateCmd.AddCommand(&cobra.Command{
+func migrateVersionCmd(ctx context.Context, m *oglmigrator.Migrator) *cobra.Command {
+	return &cobra.Command{
 		Use:   "version",
 		Short: "Retrieves the current migrations' version",
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -68,8 +83,10 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 
 			return nil
 		},
-	})
+	}
+}
 
+func migrateCreateCmd(ctx context.Context, m *oglmigrator.Migrator) *cobra.Command {
 	var targetDir string
 	createCmd := &cobra.Command{
 		Use:   "create",
@@ -82,7 +99,7 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 			reader := bufio.NewReader(os.Stdin)
 
 			// Prompt for description
-			fmt.Print("Migration description: ")
+			_, _ = fmt.Print("Migration description: ")
 			description, err := reader.ReadString('\n')
 			if err != nil {
 				return fmt.Errorf("failed to read description: %w", err)
@@ -95,8 +112,8 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 			}
 
 			// Prompt for migration type
-			fmt.Println("Migration type: [1] SQL  [2] Go")
-			fmt.Print("> ")
+			_, _ = fmt.Println("Migration type: [1] SQL  [2] Go")
+			_, _ = fmt.Print("> ")
 			choiceStr, err := reader.ReadString('\n')
 			if err != nil {
 				return fmt.Errorf("failed to read migration type: %w", err)
@@ -119,25 +136,31 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 			}
 
 			msg := color.GreenString("Migration created:")
-			fmt.Printf("\n%s %s\n", msg, filePath)
+			_, _ = fmt.Printf("\n%s %s\n", msg, filePath)
 
 			return nil
 		},
 	}
 
+	_ = ctx // ctx reserved for future use
+
 	createCmd.Flags().StringVarP(&targetDir, "directory", "d", "", "directory path where live the migrations")
 
-	migrateCmd.AddCommand(createCmd)
+	return createCmd
+}
 
-	migrateCmd.AddCommand(&cobra.Command{
+func migrateStatusCmd(ctx context.Context, m *oglmigrator.Migrator) *cobra.Command {
+	return &cobra.Command{
 		Use:   "status",
 		Short: "Show migration status",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return m.Status(ctx)
 		},
-	})
+	}
+}
 
-	migrateCmd.AddCommand(&cobra.Command{
+func migrateFixCmd(ctx context.Context, m *oglmigrator.Migrator) *cobra.Command {
+	return &cobra.Command{
 		Use:   "fix",
 		Short: "Fix migrations' order",
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -148,16 +171,18 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 
 			return nil
 		},
-	})
+	}
+}
 
-	migrateCmd.AddCommand(&cobra.Command{
+func migrateResetCmd(ctx context.Context, m *oglmigrator.Migrator) *cobra.Command {
+	return &cobra.Command{
 		Use:   "reset",
 		Short: "Roll back all migrations",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			reader := bufio.NewReader(os.Stdin)
 			red := color.New(color.FgRed)
-			red.Println("YOU ARE ABOUT TO ROOL BACK ALL MIGRATIONS!")
-			red.Print("Are you sure? (yes/No): ")
+			_, _ = red.Println("YOU ARE ABOUT TO ROOL BACK ALL MIGRATIONS!")
+			_, _ = red.Print("Are you sure? (yes/No): ")
 			choiceStr, err := reader.ReadString('\n')
 			if err != nil {
 				return fmt.Errorf("failed to read response: %w", err)
@@ -165,7 +190,7 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 
 			choiceStr = strings.ToLower(strings.TrimSpace(choiceStr))
 			if choiceStr != "yes" {
-				fmt.Println("\nWise decision. See you later…")
+				_, _ = fmt.Println("\nWise decision. See you later…")
 				return nil
 			}
 
@@ -176,9 +201,7 @@ func NewMigrateCmd(m *oglmigrator.Migrator) *cobra.Command {
 
 			return nil
 		},
-	})
-
-	return migrateCmd
+	}
 }
 
 // Migrate create and execute the `NewMigrateCmd` command.

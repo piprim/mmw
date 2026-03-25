@@ -1,4 +1,4 @@
-package ogldb
+package db
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 // StructArgs converts a struct with `db` tags into a map[string]any suitable
 // for use as named parameters in database queries.
 //
-// When used with pgx, callers cast: pgx.NamedArgs(ogldb.StructArgs(v)).
+// When used with pgx, callers cast: pgx.NamedArgs(db.StructArgs(v)).
 //
 // Fields without a `db` tag, with db:"-", or with an empty name are skipped.
 // Tag options such as db:"name,omitempty" are parsed but ignored — the database
@@ -17,7 +17,7 @@ import (
 //
 // Panics if v (after pointer dereference) is not a struct.
 func StructArgs[T any](v T) map[string]any {
-	args := map[string]any{}
+	args := make(map[string]any)
 	rv := reflect.ValueOf(v)
 	for rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()

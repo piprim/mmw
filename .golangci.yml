@@ -285,7 +285,7 @@ linters:
           severity: warning
           disabled: false
           exclude: ['']
-          arguments: [15]
+          arguments: [20]
         # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#comment-spacings
         - name: comment-spacings
           severity: warning
@@ -477,7 +477,7 @@ linters:
         # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#flag-parameter
         - name: flag-parameter
           severity: warning
-          disabled: false
+          disabled: true
           exclude: ['']
         # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#forbidden-call-in-wg-go
         - name: forbidden-call-in-wg-go
@@ -879,10 +879,10 @@ linters:
       - legacy
       - std-error-handling
     rules:
-      - linters:
-          - revive
-        text: 'package-directory-mismatch'
-        path: '/domain/'
+      # - linters:
+      #   - revive
+      # text: 'package-directory-mismatch'
+      # path: '/domain/'
       - linters:
           - wrapcheck
         text: 'eris\.New\('

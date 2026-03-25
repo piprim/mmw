@@ -1,4 +1,4 @@
-package oglstring
+package string
 
 import (
 	"bytes"

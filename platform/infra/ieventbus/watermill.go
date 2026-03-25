@@ -1,4 +1,4 @@
-package pfieventbus
+package ieventbus
 
 import (
 	"context"

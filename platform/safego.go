@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	oglmiddleware "github.com/ovya/ogl/platform/middleware"
+	"github.com/ovya/ogl/platform/middleware"
 	"github.com/rotisserie/eris"
 )
 
@@ -20,25 +20,28 @@ import (
 func SafeGo(ctx context.Context, logger *slog.Logger, fn func()) {
 	go func() {
 		defer func() {
-			if rec := recover(); rec != nil {
-				// Try to get the Request ID (if this worker was spawned from an HTTP handler)
-				reqID := oglmiddleware.GetRequestID(ctx)
-
-				// Wrap the panic into eris stack trace
-				var err error
-				switch v := rec.(type) {
-				case error:
-					err = eris.Wrap(v, "panic recovered in background worker")
-				default:
-					err = eris.Errorf("panic recovered in background worker: %v", v)
-				}
-
-				// Log the structured error so it triggers your Datadog/Loki alerts
-				logger.Error("background worker crashed",
-					"request_id", reqID,
-					"error", err,
-				)
+			rec := recover()
+			if rec == nil {
+				return
 			}
+
+			// Try to get the Request ID (if this worker was spawned from an HTTP handler)
+			reqID := middleware.GetRequestID(ctx)
+
+			// Wrap the panic into eris stack trace
+			var err error
+			switch v := rec.(type) {
+			case error:
+				err = eris.Wrap(v, "panic recovered in background worker")
+			default:
+				err = eris.Errorf("panic recovered in background worker: %v", v)
+			}
+
+			// Log the structured error so it triggers your Datadog/Loki alerts
+			logger.Error("background worker crashed",
+				"request_id", reqID,
+				"error", err,
+			)
 		}()
 
 		// Execute the actual work

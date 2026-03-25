@@ -1,5 +1,5 @@
 // libs/ogl/platform/config/config.go
-package oglpfconfig
+package config
 
 import (
 	"fmt"

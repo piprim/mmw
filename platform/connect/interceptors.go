@@ -1,5 +1,5 @@
 // libs/ogl/platform/connect/interceptors.go
-package oglconnect
+package connect
 
 import (
 	"context"

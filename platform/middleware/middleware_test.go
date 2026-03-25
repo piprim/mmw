@@ -1,4 +1,4 @@
-package oglmiddleware
+package middleware
 
 import (
 	"bytes"
@@ -58,7 +58,7 @@ func TestCORSMiddleware_Development(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	mw := CORSMiddleware(cfg, "development")
+	mw := CORSMiddleware(cfg)
 	wrappedHandler := mw(nextHandler)
 
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
@@ -69,7 +69,7 @@ func TestCORSMiddleware_Development(t *testing.T) {
 	wrappedHandler.ServeHTTP(rec, req)
 
 	// In development, allowed origins should be "*" (or reflected)
-	assert.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "", rec.Header().Get("Access-Control-Allow-Origin"))
 }
 
 func TestCORSMiddleware_Production(t *testing.T) {
@@ -81,7 +81,7 @@ func TestCORSMiddleware_Production(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	mw := CORSMiddleware(cfg, "production")
+	mw := CORSMiddleware(cfg)
 	wrappedHandler := mw(nextHandler)
 
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)

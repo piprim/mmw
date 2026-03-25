@@ -1,4 +1,4 @@
-package oglmiddleware
+package middleware
 
 import (
 	"bytes"
@@ -10,6 +10,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+)
+
+const (
+	maxBodyLen = 10000
 )
 
 // responseWriter is a minimal wrapper to capture the HTTP status code
@@ -94,9 +98,10 @@ func LoggingMiddleware(logger *slog.Logger, logPayloads bool) Middleware {
 				"ip", r.RemoteAddr,
 			}
 
-			// Add the body to logs if it exists and isn't too large
-			if len(body) > 0 && len(body) < 10000 { // Limit size to avoid log flooding
-				fields = append(fields, slog.String("payload", string(body)))
+			if len(body) > 0 {
+				// Limit size to avoid log flooding
+				l := min(len(body), maxBodyLen)
+				fields = append(fields, slog.String("payload", string(body[:l])))
 			}
 
 			logger.Log(r.Context(), lvl, "http request handled", fields...)

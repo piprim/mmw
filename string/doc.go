@@ -1,2 +1,2 @@
-// Package oglstring provides string manipulation utilities.
-package oglstring
+// Package string provides string manipulation utilities.
+package string

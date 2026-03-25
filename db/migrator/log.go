@@ -1,4 +1,4 @@
-package oglmigrator
+package migrator
 
 import (
 	"fmt"
@@ -39,7 +39,7 @@ func getColorizer(msg string) *color.Color {
 	}
 }
 
-func (l *FancyLogger) Printf(format string, v ...any) {
+func (FancyLogger) Printf(format string, v ...any) {
 	msg := fmt.Sprintf(format, v...)
 	colorizer := getColorizer(msg)
 	if colorizer != nil {
@@ -47,10 +47,14 @@ func (l *FancyLogger) Printf(format string, v ...any) {
 	}
 }
 
-func (l *FancyLogger) Println(vs ...any) {
+func (FancyLogger) Println(vs ...any) {
 	var line string
 	for i := range vs {
-		line += vs[i].(string)
+		if s, ok := vs[i].(string); ok {
+			line += s
+		} else {
+			line += fmt.Sprint(vs[i])
+		}
 	}
 
 	colorizer := getColorizer(line)
@@ -59,6 +63,7 @@ func (l *FancyLogger) Println(vs ...any) {
 	}
 }
 
-func (l *FancyLogger) Fatalf(format string, v ...any) {
+func (FancyLogger) Fatalf(format string, v ...any) {
+	//nolint:revive // FancyLogger implements a logger interface that requires Fatalf
 	log.Fatalf(format, v...)
 }

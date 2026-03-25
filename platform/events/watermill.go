@@ -1,4 +1,4 @@
-package pfevents
+package events
 
 import (
 	"context"

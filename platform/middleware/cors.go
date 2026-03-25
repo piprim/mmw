@@ -1,4 +1,4 @@
-package oglmiddleware
+package middleware
 
 import (
 	"net/http"

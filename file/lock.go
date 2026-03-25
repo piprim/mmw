@@ -1,7 +1,8 @@
 // From https://github.com/sevlyar/go-daemon
-package oglfile
+package file
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -71,17 +72,17 @@ func writePID(fileName string) error {
 // current process id to file.
 func CreatePidFile(name string, perm os.FileMode) (lock *LockFile, err error) {
 	if lock, err = OpenLockFile(name, perm); err != nil {
-		return
+		return lock, err
 	}
 	if err = lock.Lock(); err != nil {
 		_ = lock.Remove()
-		return
+		return lock, err
 	}
 	if err = lock.WritePid(); err != nil {
 		_ = lock.Remove()
 	}
 
-	return
+	return lock, err
 }
 
 // OpenLockFile opens the named file with flags os.O_RDWR|os.O_CREATE and specified perm.
@@ -92,14 +93,18 @@ func OpenLockFile(name string, perm os.FileMode) (lock *LockFile, err error) {
 		lock = &LockFile{file}
 	}
 
-	return
+	if err != nil {
+		return lock, fmt.Errorf("failed to open file: %w", err)
+	}
+
+	return lock, nil
 }
 
 // Lock applies an exclusive lock on the file using syscall.Flock.
 // This is a non-blocking operation. If the file is already locked by another process,
 // it returns ErrWouldBlock. The lock is automatically released when the file is closed.
-func (file *LockFile) Lock() error {
-	err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+func (lf *LockFile) Lock() error {
+	err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 	if err != nil {
 		return fmt.Errorf("locking file failed: %w", err)
 	}
@@ -109,8 +114,8 @@ func (file *LockFile) Lock() error {
 
 // Unlock removes the exclusive lock from the file.
 // Should be called before closing the file or can be deferred after Lock().
-func (file *LockFile) Unlock() error {
-	err := syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+func (lf *LockFile) Unlock() error {
+	err := syscall.Flock(int(lf.Fd()), syscall.LOCK_UN)
 	if err != nil {
 		return fmt.Errorf("unlocking file failed: %w", err)
 	}
@@ -123,55 +128,63 @@ func (file *LockFile) Unlock() error {
 func ReadPidFile(name string) (pid int, err error) {
 	var file *os.File
 	if file, err = os.OpenFile(name, os.O_RDONLY, os.FileMode(defaultPIDPermsNum)); err != nil {
-		return
+		return pid, fmt.Errorf("failed to open file: %w", err)
 	}
 	defer file.Close()
 
 	lock := &LockFile{file}
 	pid, err = lock.ReadPid()
 
-	return
+	return pid, err
 }
 
 // WritePid writes current process id to an open file.
-func (file *LockFile) WritePid() (err error) {
-	if _, err = file.Seek(0, io.SeekStart); err != nil {
-		return
+func (lf *LockFile) WritePid() (err error) {
+	if _, err = lf.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("failed to sets the offset: %w", err)
 	}
 
 	var fileLen int
-	if fileLen, err = fmt.Fprint(file, os.Getpid()); err != nil {
-		return
+	if fileLen, err = fmt.Fprint(lf, os.Getpid()); err != nil {
+		return fmt.Errorf("%w", err)
 	}
-	if err = file.Truncate(int64(fileLen)); err != nil {
-		return
+	if err = lf.Truncate(int64(fileLen)); err != nil {
+		return fmt.Errorf("failed to truncate file: %w", err)
 	}
-	err = file.Sync()
+	err = lf.Sync()
 
-	return
+	if err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+
+	return nil
 }
 
 // ReadPid reads process id from file and returns pid.
 // If unable read from a file, returns error.
-func (file *LockFile) ReadPid() (pid int, err error) {
-	if _, err = file.Seek(0, io.SeekStart); err != nil {
-		return
+func (lf *LockFile) ReadPid() (pid int, err error) {
+	if _, err = lf.Seek(0, io.SeekStart); err != nil {
+		return pid, fmt.Errorf("faile to set offset: %w", err)
 	}
-	_, err = fmt.Fscan(file, &pid)
+	_, err = fmt.Fscan(lf, &pid)
 
-	return
+	if err != nil {
+		return pid, fmt.Errorf("failed to scan file: %w", err)
+	}
+
+	return pid, nil
 }
 
 // Remove removes lock, closes and removes an open file.
-func (file *LockFile) Remove() error {
-	if file != nil {
-		defer file.Close()
+func (lf *LockFile) Remove() error {
+	if lf != nil {
+		defer lf.Close()
 
-		if err := file.Unlock(); err != nil {
+		if err := lf.Unlock(); err != nil {
 			return err
 		}
 
-		name, err := GetFdName(file.Fd())
+		name, err := GetFdName(lf.Fd())
 		if err != nil {
 			return err
 		}
@@ -191,7 +204,7 @@ func (file *LockFile) Remove() error {
 func GetFdName(fd uintptr) (name string, err error) {
 	// Sanity check: FDs shouldn't be massive.
 	if fd > fdLimit {
-		return "", fmt.Errorf("invalid or out-of-range file descriptor")
+		return "", errors.New("invalid or out-of-range file descriptor")
 	}
 
 	// Construct path using a safer conversion
@@ -200,7 +213,7 @@ func GetFdName(fd uintptr) (name string, err error) {
 	var fi os.FileInfo
 
 	if fi, err = os.Lstat(path); err != nil {
-		return
+		return name, fmt.Errorf("failed to stat path: %w", err)
 	}
 
 	// Handle cases where fi.Size() might be 0 (common in /proc)
@@ -215,5 +228,9 @@ func GetFdName(fd uintptr) (name string, err error) {
 		name = string(buf[:n])
 	}
 
-	return
+	if err != nil {
+		return name, fmt.Errorf("failed to read link: %w", err)
+	}
+
+	return name, nil
 }

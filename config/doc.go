@@ -53,4 +53,4 @@
 //
 //   - mapstructure: Maps TOML/JSON/YAML fields to struct fields (use kebab-case)
 //   - env: Maps environment variables to struct fields
-package oglconfig
+package config

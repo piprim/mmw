@@ -1,4 +1,4 @@
-package oglos
+package os
 
 import (
 	"os"
@@ -17,12 +17,10 @@ func EnvMap() map[string]string {
 		return items
 	}
 
-	environment := getenvironment(os.Environ(), func(item string) (key, val string) {
+	environment := getenvironment(os.Environ(), func(item string) (string, string) {
 		splits := strings.SplitN(item, "=", 2)
-		key = splits[0]
-		val = splits[1]
 
-		return
+		return splits[0], splits[1]
 	})
 
 	return environment

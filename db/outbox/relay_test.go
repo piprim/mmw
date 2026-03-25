@@ -1,4 +1,4 @@
-package ogloutbox
+package outbox
 
 import (
 	"context"
