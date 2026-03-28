@@ -9,7 +9,7 @@
 // # Concept
 //
 // The UnitOfWork injects a pgx.Tx into the context. When a repository executes
-// a query, it uses GetExecutor to check the context. If a transaction is found,
+// a query, it calls uow.Executor(ctx) to check the context. If a transaction is found,
 // the query runs inside the transaction. If not, it falls back to the standard
 // connection pool.
 //
@@ -28,24 +28,23 @@
 //
 // # Example: Infrastructure Layer (Repository)
 //
-// Your repositories use GetExecutor to seamlessly support both standalone
-// queries and transaction-bound queries:
+// Your repositories hold a *UnitOfWork and call Executor to seamlessly support
+// both standalone queries and transaction-bound queries:
 //
 //	package repository
 //
 //	import (
 //	    "context"
-//	    "github.com/jackc/pgx/v5/pgxpool"
-//	    "github.com/ovya/ogl/postgresql/uow"
+//	    "github.com/ovya/ogl/pg/uow"
 //	)
 //
 //	type UserRepository struct {
-//	    pool *pgxpool.Pool
+//	    uow *uow.UnitOfWork
 //	}
 //
 //	func (r *UserRepository) Save(ctx context.Context, user *User) error {
 //	    // Magically uses the transaction if it exists in the context!
-//	    exec := uow.GetExecutor(ctx, r.pool)
+//	    exec := r.uow.Executor(ctx)
 //
 //	    _, err := exec.Exec(ctx, "INSERT INTO users (id, name) VALUES ($1, $2)", user.ID, user.Name)
 //	    return err

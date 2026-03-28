@@ -25,9 +25,8 @@ type DBExecutor interface {
 
 type txKey struct{}
 
-// GetExecutor safely extracts the transaction from the context, or falls back to the pool.
-// Repositories call this directly.
-func GetExecutor(ctx context.Context, pool *pgxpool.Pool) DBExecutor {
+// getExecutor safely extracts the transaction from the context, or falls back to the pool.
+func getExecutor(ctx context.Context, pool *pgxpool.Pool) DBExecutor {
 	if tx, ok := ctx.Value(txKey{}).(pgx.Tx); ok {
 		return tx
 	}
@@ -42,6 +41,12 @@ type UnitOfWork struct {
 
 func New(pool *pgxpool.Pool) *UnitOfWork {
 	return &UnitOfWork{pool: pool}
+}
+
+// Executor returns the active transaction for ctx, or the pool if no transaction is running.
+// Repositories hold a *UnitOfWork and call this method instead of accessing the pool directly.
+func (u *UnitOfWork) Executor(ctx context.Context) DBExecutor {
+	return getExecutor(ctx, u.pool)
 }
 
 func (u *UnitOfWork) WithTransaction(ctx context.Context, fn func(context.Context) error) error {

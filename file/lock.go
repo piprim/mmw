@@ -152,7 +152,6 @@ func (lf *LockFile) WritePid() (err error) {
 		return fmt.Errorf("failed to truncate file: %w", err)
 	}
 	err = lf.Sync()
-
 	if err != nil {
 		return fmt.Errorf("failed to sync file: %w", err)
 	}
@@ -167,7 +166,6 @@ func (lf *LockFile) ReadPid() (pid int, err error) {
 		return pid, fmt.Errorf("faile to set offset: %w", err)
 	}
 	_, err = fmt.Fscan(lf, &pid)
-
 	if err != nil {
 		return pid, fmt.Errorf("failed to scan file: %w", err)
 	}

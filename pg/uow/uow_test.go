@@ -152,7 +152,7 @@ func TestGetExecutor_WithTransaction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := tt.setupCtx()
 
-			executor := GetExecutor(ctx, (*pgxpool.Pool)(nil))
+			executor := getExecutor(ctx, (*pgxpool.Pool)(nil))
 
 			if tt.expectTx {
 				_, ok := executor.(pgx.Tx)
@@ -172,7 +172,7 @@ func TestGetExecutor_PreservesTransactionIdentity(t *testing.T) {
 	tx := &mockTx{}
 	ctx := context.WithValue(context.Background(), txKey{}, tx)
 
-	executor := GetExecutor(ctx, (*pgxpool.Pool)(nil))
+	executor := getExecutor(ctx, (*pgxpool.Pool)(nil))
 
 	// The executor should be the exact same transaction instance
 	extractedTx, ok := executor.(pgx.Tx)
@@ -203,8 +203,8 @@ func TestUnitOfWork_WithTransaction_Success(t *testing.T) {
 		// Create a transaction context manually to test GetExecutor behavior
 		txCtx := context.WithValue(ctx, txKey{}, tx)
 
-		// Verify that GetExecutor returns the transaction
-		executor := GetExecutor(txCtx, (*pgxpool.Pool)(nil))
+		// Verify that getExecutor returns the transaction
+		executor := getExecutor(txCtx, (*pgxpool.Pool)(nil))
 		_, isTx := executor.(pgx.Tx)
 		assert.True(t, isTx, "GetExecutor should return transaction from context")
 	})
@@ -365,7 +365,7 @@ func BenchmarkGetExecutor_WithoutTransaction(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		_ = GetExecutor(ctx, pool)
+		_ = getExecutor(ctx, pool)
 	}
 }
 
@@ -376,6 +376,6 @@ func BenchmarkGetExecutor_WithTransaction(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		_ = GetExecutor(ctx, pool)
+		_ = getExecutor(ctx, pool)
 	}
 }
