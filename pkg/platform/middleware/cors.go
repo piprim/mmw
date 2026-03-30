@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	connectcors "connectrpc.com/cors"
-	pfconfig "github.com/piprim/mmw/platform/config"
+	pfconfig "github.com/piprim/mmw/pkg/platform/config"
 
 	"github.com/rs/cors"
 )

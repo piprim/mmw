@@ -1,4 +1,4 @@
-// libs/ogl/platform/connect/interceptors.go
+// mmw/pkg/platform/connect/interceptors.go
 package connect
 
 import (

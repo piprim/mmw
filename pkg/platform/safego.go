@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/piprim/mmw/platform/middleware"
+	"github.com/piprim/mmw/pkg/platform/middleware"
 	"github.com/rotisserie/eris"
 )
 

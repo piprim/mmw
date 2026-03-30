@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	pfevents "github.com/piprim/mmw/platform/events"
+	pfevents "github.com/piprim/mmw/pkg/platform/events"
 	"github.com/rotisserie/eris"
 )
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/piprim/mmw/platform"
+	"github.com/piprim/mmw/pkg/platform"
 )
 
 func TestDomainError_Error_ReturnsMessage(t *testing.T) {

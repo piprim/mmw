@@ -11,7 +11,7 @@ import (
 
 	"github.com/fatih/color"
 	_ "github.com/lib/pq" // postgres driver registration required for goose sql-style migrations
-	"github.com/piprim/mmw/platform/db/migrator"
+	"github.com/piprim/mmw/pkg/platform/db/migrator"
 	"github.com/pressly/goose/v3"
 	"github.com/rotisserie/eris"
 	"github.com/spf13/cobra"

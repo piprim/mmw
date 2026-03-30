@@ -1,4 +1,3 @@
-// libs/platform/server/server.go
 package server
 
 import (
@@ -12,8 +11,8 @@ import (
 	"net/http/pprof"
 	"runtime/debug"
 
-	pfconfig "github.com/piprim/mmw/platform/config"
-	"github.com/piprim/mmw/platform/middleware"
+	pfconfig "github.com/piprim/mmw/pkg/platform/config"
+	"github.com/piprim/mmw/pkg/platform/middleware"
 	"github.com/rotisserie/eris"
 )
 

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 
-	oglos "github.com/piprim/mmw/platform/os"
+	oglos "github.com/piprim/mmw/pkg/platform/os"
 	"github.com/sethvargo/go-envconfig"
 	"github.com/spf13/viper"
 )

@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	pfconfig "github.com/piprim/mmw/platform/config"
+	pfconfig "github.com/piprim/mmw/pkg/platform/config"
 	"github.com/stretchr/testify/assert"
 )
 

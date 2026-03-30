@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/piprim/mmw/platform/core"
+	"github.com/piprim/mmw/pkg/platform/core"
 	"github.com/rotisserie/eris"
 	"golang.org/x/sync/errgroup"
 )
