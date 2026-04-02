@@ -41,9 +41,19 @@ type Migrator struct {
 // tableName is the schema-qualified table used to track migration versions (e.g. "auth.goose_db_version").
 // Using a per-service schema-qualified name prevents version collisions when multiple services
 // share the same database.
-func New(db *sql.DB, fsys fs.FS, dir, tableName string, optionsF ...goose.OptionsFunc) *Migrator {
+func New(db *sql.DB, fsys fs.FS, dir, schemaName string, optionsF ...goose.OptionsFunc) (*Migrator, error) {
 	// Set goose to use the provided file system
 	goose.SetBaseFS(fsys)
+	tableName := schemaName + ".goose_db_version"
+
+	// The schema must exist before goose can create its version-tracking table
+	// inside it. Migrations themselves also create the schema (CREATE SCHEMA IF
+	// NOT EXISTS), so this is intentionally idempotent.
+	if _, err := db.ExecContext(context.Background(),
+		fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", schemaName),
+	); err != nil {
+		return nil, fmt.Errorf("can not create schema %s: %w", schemaName, err)
+	}
 
 	return &Migrator{
 		db:        db,
@@ -51,7 +61,7 @@ func New(db *sql.DB, fsys fs.FS, dir, tableName string, optionsF ...goose.Option
 		dir:       dir,
 		tableName: tableName,
 		optionsF:  optionsF,
-	}
+	}, nil
 }
 
 func (m *Migrator) Up(ctx context.Context) (int64, error) {

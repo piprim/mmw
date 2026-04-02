@@ -224,21 +224,14 @@ func Migrate(dbURL, schemaName string, migrationsFS fs.FS) error {
 		return fmt.Errorf("can ping database connection: %w", err)
 	}
 
-	// The schema must exist before goose can create its version-tracking table
-	// inside it. Migrations themselves also create the schema (CREATE SCHEMA IF
-	// NOT EXISTS), so this is intentionally idempotent.
-	if _, err := db.ExecContext(context.Background(),
-		fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", schemaName),
-	); err != nil {
-		return fmt.Errorf("can not create schema %s: %w", schemaName, err)
-	}
-
 	options := []goose.OptionsFunc{
 		goose.WithAllowMissing(),
 	}
 
-	tableName := schemaName + ".goose_db_version"
-	m := migrator.New(db, migrationsFS, "scripts", tableName, options...)
+	m, err := migrator.New(db, migrationsFS, "scripts", schemaName, options...)
+	if err != nil {
+		return fmt.Errorf("failed to create migrator: %w", err)
+	}
 
 	if err := NewMigrateCmd(m).Execute(); err != nil {
 		return fmt.Errorf("failed to exceute migrate command: %w", err)

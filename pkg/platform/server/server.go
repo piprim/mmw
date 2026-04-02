@@ -18,9 +18,10 @@ import (
 
 // HTTPServer is a generic worker that manages the lifecycle of an HTTP server.
 type HTTPServer struct {
-	server *http.Server
-	logger *slog.Logger
-	cfg    pfconfig.Server
+	server  *http.Server
+	handler http.Handler
+	logger  *slog.Logger
+	cfg     pfconfig.Server
 }
 
 type HealthFns = map[string]func(context.Context) (any, error)
@@ -94,8 +95,9 @@ func NewHTTPServer(infra HTTPServerInfra) *HTTPServer {
 			ReadHeaderTimeout: infra.Config.ReadHeaderTimeout,
 			IdleTimeout:       infra.Config.IdleTimeout,
 		},
-		logger: infra.Logger,
-		cfg:    *infra.Config,
+		handler: finalHandler,
+		logger:  infra.Logger,
+		cfg:     *infra.Config,
 	}
 }
 
@@ -128,6 +130,12 @@ func writeProcessInfo(w io.Writer) {
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ") // Pretty-print
 	_ = encoder.Encode(bi)
+}
+
+// Handler returns the root HTTP handler so that tests can wrap it in
+// httptest.NewServer without binding to a real port.
+func (s *HTTPServer) Handler() http.Handler {
+	return s.handler
 }
 
 // Start blocks until the context is canceled, then performs a graceful shutdown.
