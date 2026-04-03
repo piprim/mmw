@@ -1,0 +1,160 @@
+# Mise configuration for {{.NameTitle}} module
+[settings]
+experimental = true
+quiet = true
+
+[tools]
+go = "latest"
+golangci-lint = "latest"
+
+[vars]
+GOTESTSUM_OPTIONS = "--format testdox"
+BINARY_NAME = "{{.Name}}"
+COMPILE_OPTIONS="-tags no_clickhouse,no_mysql,no_mssql"
+BINARY_PATH = "./cmd/{{.Name}}"
+BUILD_DIR = "bin"
+{{if .WithConnect}}CONTRACTS_DIR = "{{`{{config_root}}`}}/../../contracts"{{end}}
+{{if .WithDatabase}}
+MIGRATIONS_DIR= "{{`{{config_root}}`}}/internal/infra/persistence/migrations/scripts"
+{{end}}
+
+[tasks.build]
+description = "Build the application binary"
+run = """
+[ -e {{`{{vars.BUILD_DIR}}`}} ] || mkdir -p {{`{{vars.BUILD_DIR}}`}}
+go build {{`{{vars.COMPILE_OPTIONS}}`}} -o {{`{{vars.BUILD_DIR}}/{{vars.BINARY_NAME}}`}} -v {{`{{vars.BINARY_PATH}}`}}
+"""
+
+[tasks.run]
+description = "Run the application"
+run = """
+go run {{`{{vars.COMPILE_OPTIONS}}`}} {{`{{vars.BINARY_PATH}}`}}
+"""
+
+
+[tasks.pre-commit]
+depends = ["arch:check"{{if .WithConnect}}, "buf:lint"{{end}}]
+description = "Pre-commit checks (can be run manually or as git hook)"
+run = "APP_ROOT_PATH={{`{{config_root}}`}} ./scripts/common/pre-commit.sh"
+alias = "pc"
+
+[tasks.test]
+description = "Run unit tests"
+run = "go tool gotestsum {{`{{vars.GOTESTSUM_OPTIONS}}`}} -- ./..."
+
+[tasks."test:integration"]
+description = "Run integration tests (requires Docker)"
+run = "go tool gotestsum {{`{{vars.GOTESTSUM_OPTIONS}}`}} -- -tags integration ./..."
+
+[tasks."test:contract"]
+description = "Run contract tests (no Docker needed)"
+run = "go tool gotestsum {{`{{vars.GOTESTSUM_OPTIONS}}`}} -- -v ./test/contract/..."
+
+[tasks."arch:check"]
+description = "Validate architecture boundaries for this module"
+run = "arch-go"
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.fmt]
+description = "Format all Go code"
+run = """
+  echo "Formatting Go code."
+  gofumpt -l -w .
+  """
+{{if .WithConnect}}
+[tasks."buf:lint"]
+description = "Lint protobuf files"
+run = """
+#!/usr/bin/env bash
+  set -euo pipefail
+
+  cd {{`{{config_root}}`}} || exit 1
+  source scripts/common/libs/st.bash
+
+  st.quiet
+
+  cd {{`{{vars.CONTRACTS_DIR}}`}}
+  st.doing "Linting proto file"
+  st.do buf lint proto
+"""
+
+[tasks."buf:deps"]
+description = "Download buf dependencies"
+run = """
+cd {{`{{vars.CONTRACTS_DIR}}`}}
+buf mod update
+"""
+
+[tasks."buf:format"]
+description = "Format protobuf files (Todo API only)"
+run = """
+cd {{`{{vars.CONTRACTS_DIR}}`}}
+buf format -w proto/todo
+"""
+
+[tasks."buf:breaking"]
+description = "Check for breaking changes in protobuf"
+run = """
+cd {{`{{vars.CONTRACTS_DIR}}`}}
+buf breaking --against '.git#branch=master' proto/todo
+"""
+
+[tasks."buf:generate"]
+description = "Generate the protocol buffer code"
+run = """
+#!/usr/bin/env bash
+  set -euo pipefail
+
+  cd {{`{{config_root}}`}} || exit 1
+  source scripts/common/libs/st.bash
+
+  st.quiet
+
+  st.doing 'Generating Proto'
+  cd {{`{{vars.CONTRACTS_DIR}}`}}
+  st.do buf generate --template buf.gen.{{.Name}}.yaml
+  st.done
+"""
+{{end}}
+
+{{if .WithDatabase}}
+# Database tasks
+[tasks."db:migrate:build"]
+description = "Build the database migrations (needed to embed go migrations)"
+# sources = ["cmd/migration/*.go", "{{config_root}}/internal/infra/persistence/migrations/scripts/*.go"]
+run = """
+  go build {{`{{vars.COMPILE_OPTIONS}}`}} -o {{`{{vars.BUILD_DIR}}`}}/ cmd/migration/migrate.go &&
+  ls -l {{`{{vars.BUILD_DIR}}`}}/migrate
+"""
+
+[tasks."db:migrate:up"]
+description = "Run database migrations up"
+run = "go run {{`{{vars.COMPILE_OPTIONS}}`}} cmd/migration/*.go up"
+
+[tasks."db:migrate:down"]
+description = "Run database migrations down"
+run = "go run {{`{{vars.COMPILE_OPTIONS}}`}} cmd/migration/*.go down"
+
+[tasks."db:migrate:create"]
+description = "Create new SQL/Go migration"
+run = "go run {{`{{vars.COMPILE_OPTIONS}}`}} cmd/migration/*.go create -d {{`{{vars.MIGRATIONS_DIR}}`}}"
+
+[tasks."db:migrate:version"]
+description = "Show current migration version"
+run = "go run cmd/migration/*.go version"
+
+[tasks."db:migrate:fix"]
+description = "Fix the order of migrations"
+run = "go run cmd/migration/*.go fix"
+
+[tasks."db:migrate:reset"]
+description = "Down all the migrations"
+run = "go run cmd/migration/*.go reset"
+
+[tasks."db:migrate:status"]
+description = "Show current migration statud"
+run = "go run cmd/migration/*.go status"
+{{end}}

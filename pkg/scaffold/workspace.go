@@ -1,0 +1,61 @@
+package scaffold
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// UpdateGoWork adds the new module path to go.work if not already present.
+func UpdateGoWork(repoRoot, name string) error {
+	goWorkPath := filepath.Join(repoRoot, "go.work")
+	content, err := os.ReadFile(goWorkPath)
+	if err != nil {
+		return fmt.Errorf("read go.work: %w", err)
+	}
+
+	newEntry := "\t./modules/" + name
+	if strings.Contains(string(content), newEntry) {
+		return nil // already present, idempotent
+	}
+
+	// Insert before the closing ")" of the use block
+	updated := strings.Replace(string(content), "\n)", "\n"+newEntry+"\n)", 1)
+	if updated == string(content) {
+		return errors.New("could not find use block in go.work")
+	}
+
+	return os.WriteFile(goWorkPath, []byte(updated), 0600)
+}
+
+// UpdateMiseToml adds test/build tasks for the new module to poc/mise.toml.
+func UpdateMiseToml(repoRoot, name string) error {
+	misePath := filepath.Join(repoRoot, "mise.toml")
+	content, err := os.ReadFile(misePath)
+	if err != nil {
+		return fmt.Errorf("read mise.toml: %w", err)
+	}
+
+	marker := fmt.Sprintf(`[tasks."%s:test"]`, name)
+	if strings.Contains(string(content), marker) {
+		return nil // idempotent
+	}
+
+	addition := fmt.Sprintf(`
+[tasks."%s:test"]
+description = "Run unit tests for %s module"
+run = "cd modules/%s && mise run test"
+
+[tasks."%s:test:integration"]
+description = "Run integration tests for %s module"
+run = "cd modules/%s && mise run test:integration"
+
+[tasks."%s:test:contract"]
+description = "Run contract tests for %s module"
+run = "cd modules/%s && mise run test:contract"
+`, name, name, name, name, name, name, name, name, name)
+
+	return os.WriteFile(misePath, append(content, []byte(addition)...), 0600)
+}

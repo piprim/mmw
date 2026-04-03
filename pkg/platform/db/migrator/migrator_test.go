@@ -78,7 +78,10 @@ func TestMigrator_Create(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// We don't need a DB connection for Create
-	m := New(nil, nil, tmpDir, "test.goose_db_version")
+	m, err := New(nil, nil, tmpDir, "test.goose_db_version")
+	if err != nil {
+		t.Fatalf("failed to create migrator: %v", err)
+	}
 
 	t.Run("Create SQL migration", func(t *testing.T) {
 		desc := "create items table"

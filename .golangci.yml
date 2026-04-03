@@ -759,7 +759,7 @@ linters:
           exclude: ['']
           arguments:
             - '^fmt.Printf'
-            - 'myFunction'
+            - '^fmt.Println'
         # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unnecessary-format
         - name: unnecessary-format
           severity: warning

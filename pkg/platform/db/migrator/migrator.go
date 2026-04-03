@@ -49,10 +49,12 @@ func New(db *sql.DB, fsys fs.FS, dir, schemaName string, optionsF ...goose.Optio
 	// The schema must exist before goose can create its version-tracking table
 	// inside it. Migrations themselves also create the schema (CREATE SCHEMA IF
 	// NOT EXISTS), so this is intentionally idempotent.
-	if _, err := db.ExecContext(context.Background(),
-		fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", schemaName),
-	); err != nil {
-		return nil, fmt.Errorf("can not create schema %s: %w", schemaName, err)
+	if db != nil {
+		if _, err := db.ExecContext(context.Background(),
+			fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", schemaName),
+		); err != nil {
+			return nil, fmt.Errorf("can not create schema %s: %w", schemaName, err)
+		}
 	}
 
 	return &Migrator{
