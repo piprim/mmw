@@ -24,7 +24,7 @@ func Publish[T proto.Message](ctx context.Context, bus SystemEventBus, topic str
 }
 
 // Handle wraps a typed proto handler into a Watermill function that returns only an error.
-// Useful for router.AddNoPublisherHandler.
+// Useful for router.AddConsumerHandler.
 //
 // The double type parameter constraint (T = *PT) lets Go allocate a concrete
 // zero value with new(PT) and then convert it to the interface T, avoiding
@@ -32,7 +32,7 @@ func Publish[T proto.Message](ctx context.Context, bus SystemEventBus, topic str
 //
 // Usage:
 //
-//	router.AddNoPublisherHandler("name", topic, sub,
+//	router.AddConsumerHandler("name", topic, sub,
 //	    pfevents.Handle(func(ctx context.Context, e *defauth.UserDeletedEvent) error {
 //	        return cmd.Execute(ctx, e.UserId)
 //	    }),
