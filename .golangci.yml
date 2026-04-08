@@ -761,6 +761,8 @@ linters:
             - '^fmt.Printf'
             - '^fmt.Println'
             - '^fmt.Fprint'
+            - '^fmt.Fprintln'
+            - '^fmt.Fprintf'
         # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#unnecessary-format
         - name: unnecessary-format
           severity: warning

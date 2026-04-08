@@ -1,21 +1,20 @@
-//go:build ignore
-
 // coverage prints a formatted test coverage table for every Go package.
 //
 // Usage:
 //
-//	go run scripts/coverage.go [flags]
+//	go run coverage.go [flags]
 //
 // Examples:
 //
-//	go run scripts/coverage.go
-//	go run scripts/coverage.go --short
-//	go run scripts/coverage.go --packages ./pkg/platform/...
-//	go run scripts/coverage.go --run TestFoo --min 80
-package main
+//	go run coverage.go
+//	go run coverage.go --short
+//	go run coverage.go --packages ./pkg/platform/...
+//	go run coverage.go --run TestFoo --min 80
+package test
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -27,7 +26,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// --- Types ---
+const (
+	fullpct    = 100.0
+	goodpct    = 80.0
+	partialpct = 50.0
+	lowpct     = 20.0
+)
 
 type row struct {
 	pkg      string
@@ -36,8 +40,6 @@ type row struct {
 	status   string
 	hasTests bool
 }
-
-// --- Helpers ---
 
 // moduleFromGoMod reads the module name from go.mod in the current directory.
 // Using "go list -m" is unreliable in Go workspaces because it returns every module.
@@ -51,57 +53,70 @@ func moduleFromGoMod() (string, error) {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "module ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "module ")), nil
+		if after, ok := strings.CutPrefix(line, "module "); ok {
+			return strings.TrimSpace(after), nil
 		}
 	}
+
 	return "", errors.New("module directive not found in go.mod")
 }
 
 func coverageStatus(pct float64) string {
 	switch {
-	case pct == 100.0:
+	case pct == fullpct:
 		return "Full"
-	case pct >= 80.0:
+	case pct >= goodpct:
 		return "Good"
-	case pct >= 50.0:
+	case pct >= partialpct:
 		return "Partial"
-	case pct >= 20.0:
+	case pct >= lowpct:
 		return "Low"
 	default:
 		return "Critical gap"
 	}
 }
 
+// parse output line: ok  \t<pkg>\t<duration>\tcoverage: XX.X% of statements
+func parseOKLine(line, module string) *row {
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return nil
+	}
+
+	pkg := strings.TrimPrefix(fields[1], module+"/")
+
+	var pct float64
+	for _, field := range fields {
+		if before, ok := strings.CutSuffix(field, "%"); ok {
+			if v, err := strconv.ParseFloat(before, 64); err == nil {
+				pct = v
+			}
+
+			break
+		}
+	}
+
+	return &row{
+		pkg:      pkg,
+		cov:      fmt.Sprintf("%.1f%%", pct),
+		pct:      pct,
+		status:   coverageStatus(pct),
+		hasTests: true,
+	}
+}
+
 func parseOutput(output, module string) []row {
 	var rows []row
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.TrimSpace(line)
 		switch {
 		case strings.HasPrefix(line, "ok"):
 			// ok  \t<pkg>\t<duration>\tcoverage: XX.X% of statements
-			fields := strings.Fields(line)
-			if len(fields) < 2 {
+			row := parseOKLine(line, module)
+			if row == nil {
 				continue
 			}
-			pkg := strings.TrimPrefix(fields[1], module+"/")
-
-			var pct float64
-			for _, field := range fields {
-				if strings.HasSuffix(field, "%") {
-					if v, err := strconv.ParseFloat(strings.TrimSuffix(field, "%"), 64); err == nil {
-						pct = v
-					}
-					break
-				}
-			}
-			rows = append(rows, row{
-				pkg:      pkg,
-				cov:      fmt.Sprintf("%.1f%%", pct),
-				pct:      pct,
-				status:   coverageStatus(pct),
-				hasTests: true,
-			})
+			rows = append(rows, *row)
 
 		case strings.HasPrefix(line, "?"):
 			// ?   \t<pkg>\t[no test files]
@@ -118,6 +133,7 @@ func parseOutput(output, module string) []row {
 			})
 		}
 	}
+
 	return rows
 }
 
@@ -135,7 +151,8 @@ func printTable(w io.Writer, rows []row) {
 		}
 	}
 
-	hline := func(left, mid, right, fill string) {
+	hline := func(left, mid, right string) {
+		fill := "─"
 		fmt.Fprint(w, left)
 		fmt.Fprint(w, strings.Repeat(fill, w1+2))
 		fmt.Fprint(w, mid)
@@ -148,16 +165,16 @@ func printTable(w io.Writer, rows []row) {
 		fmt.Fprintf(w, "│ %-*s │ %-*s │ %-*s │\n", w1, p, w2, c, w3, s)
 	}
 
-	hline("┌", "┬", "┐", "─")
+	hline("┌", "┬", "┐")
 	dataRow("Package", "Coverage", "Status")
-	hline("├", "┼", "┤", "─")
+	hline("├", "┼", "┤")
 	for i, r := range rows {
 		dataRow(r.pkg, r.cov, r.status)
 		if i < len(rows)-1 {
-			hline("├", "┼", "┤", "─")
+			hline("├", "┼", "┤")
 		}
 	}
-	hline("└", "┴", "┘", "─")
+	hline("└", "┴", "┘")
 }
 
 // --- Command ---
@@ -170,7 +187,7 @@ type options struct {
 	min      float64
 }
 
-func newRootCmd() *cobra.Command {
+func NewCoverageCmd() *cobra.Command {
 	opts := &options{}
 
 	cmd := &cobra.Command{
@@ -191,7 +208,7 @@ Pass --min to enforce a minimum coverage threshold and exit with a
 non-zero status if any package with tests falls below it.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return run(cmd, opts)
 		},
 	}
@@ -225,7 +242,7 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Exit code of "go test" is intentionally ignored: a failing test suite
 	// should still display the coverage table.
-	goCmd := exec.Command("go", testArgs...)
+	goCmd := exec.CommandContext(context.Background(), "go", testArgs...)
 	goCmd.Stderr = cmd.ErrOrStderr()
 	out, _ := goCmd.Output()
 
@@ -247,18 +264,10 @@ func run(cmd *cobra.Command, opts *options) error {
 		if len(below) > 0 {
 			fmt.Fprintf(cmd.ErrOrStderr(), "\ncoverage below %.0f%% threshold:\n%s\n",
 				opts.min, strings.Join(below, "\n"))
+
 			return fmt.Errorf("%.0f%% minimum coverage threshold not met", opts.min)
 		}
 	}
 
 	return nil
-}
-
-// --- Entry point ---
-
-func main() {
-	if err := newRootCmd().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 }

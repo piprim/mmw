@@ -31,11 +31,7 @@ run = "gotestsum {{vars.GOTESTSUM_OPTIONS}} --watch -- -v ./..."
 
 [tasks."test:coverage"]
 description = "Run tests with coverage report"
-run = """
-gotestsum {{vars.GOTESTSUM_OPTIONS}} -- -v -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out -o coverage.html
-echo "Coverage report generated: coverage.html"
-"""
+run = "go run ./cmd/mmw-cli/main.go test coverage"
 
 [tasks."test:short"]
 description = "Run only short tests"
