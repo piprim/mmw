@@ -37,7 +37,7 @@ func TestApplicationPurityValidator_Fail_ContractsImport(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(appDir, "errors.go"), []byte(`
 package application
 
-import deftodo "github.com/pivaldi/mmw-contracts/definitions/todo"
+import deftodo "github.com/pivaldi/mmw-contracts/go/application/todo"
 
 type ErrorCode = deftodo.ErrorCode
 `), 0600))

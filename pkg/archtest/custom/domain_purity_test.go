@@ -36,7 +36,7 @@ func TestDomainPurityValidator_Fail_ContractsImport(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(domainDir, "events.go"), []byte(`
 package domain
 
-import "github.com/pivaldi/mmw-contracts/definitions/todo"
+import "github.com/pivaldi/mmw-contracts/go/application/todo"
 
 type Event struct{ topic string }
 `), 0600))
