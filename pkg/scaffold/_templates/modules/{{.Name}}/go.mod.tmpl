@@ -1,0 +1,22 @@
+module {{.ModulePath}}
+
+go 1.26.1
+
+require (
+	github.com/google/uuid v1.6.0
+	{{.PlatformPath}} v0.0.0
+	github.com/rotisserie/eris v0.5.4
+	github.com/stretchr/testify v1.11.1
+	golang.org/x/sync v0.20.0
+{{- if .WithConnect}}
+	connectrpc.com/connect v1.19.1
+	golang.org/x/net v0.50.0
+{{- end}}
+{{- if .WithDatabase}}
+	github.com/jackc/pgx/v5 v5.9.1
+	github.com/pressly/goose/v3 v3.27.0
+{{- end}}
+{{- if .WithContract}}
+	{{.ContractsPath}} v0.0.0
+{{- end}}
+)

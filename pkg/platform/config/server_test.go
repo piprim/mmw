@@ -41,6 +41,11 @@ func TestServer_SetDefaults_PartialZero(t *testing.T) {
 	assert.Equal(t, shutdownTimeout, s.ShutdownTimeout)
 }
 
+func TestServer_DebugEnabled_DefaultFalse(t *testing.T) {
+	s := &Server{}
+	assert.False(t, s.DebugEnabled)
+}
+
 func TestServer_URL_Basic(t *testing.T) {
 	s := &Server{
 		Scheme: "http",

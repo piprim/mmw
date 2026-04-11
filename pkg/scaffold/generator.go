@@ -7,206 +7,143 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 )
 
-//go:embed templates
+//go:embed all:_templates
 var templatesFS embed.FS
 
-// fileSpec describes a file to generate.
-type fileSpec struct {
-	tmplPath   string                 // path inside templates/
-	outputPath string                 // relative to repoRoot; may contain {{.Name}} etc.
-	condition  func(*ModuleData) bool // nil = always generate
-}
-
-// moduleSpecs defines every file generated for a module.
-var moduleSpecs = []fileSpec{
-	// Base
-	{tmplPath: "templates/module/go.mod.tmpl",
-		outputPath: "modules/{{.Name}}/go.mod"},
-	{tmplPath: "templates/module/mod.go.tmpl",
-		outputPath: "modules/{{.Name}}/{{.Name}}mod.go"},
-	{tmplPath: "templates/module/mise.toml.tmpl",
-		outputPath: "modules/{{.Name}}/mise.toml"},
-	// Domain
-	{tmplPath: "templates/module/domain/aggregate.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/domain/{{.Name}}.go"},
-	{tmplPath: "templates/module/domain/value_objects.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/domain/value_objects.go"},
-	{tmplPath: "templates/module/domain/events.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/domain/events.go"},
-	{tmplPath: "templates/module/domain/errors.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/domain/errors.go"},
-	// Application
-	{tmplPath: "templates/module/application/service.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/application/service.go"},
-	{tmplPath: "templates/module/application/errors.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/application/errors.go"},
-	{tmplPath: "templates/module/application/ports/ports.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/application/ports/ports.go"},
-	// Adapters — outbound (always)
-	{tmplPath: "templates/module/adapters/outbound/persistence/postgres/repository.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/adapters/outbound/persistence/postgres/repository.go"},
-	{tmplPath: "templates/module/adapters/outbound/events/topics.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/adapters/outbound/events/topics.go"},
-	{tmplPath: "templates/module/adapters/outbound/events/outbox_dispatcher.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/adapters/outbound/events/outbox_dispatcher.go"},
-	// Infra — config (always)
-	{tmplPath: "templates/module/infra/config/config.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/infra/config/config.go"},
-	{tmplPath: "templates/module/infra/config/configs/default.toml.tmpl",
-		outputPath: "modules/{{.Name}}/internal/infra/config/configs/default.toml"},
-	{tmplPath: "templates/module/infra/config/configs/development.toml.tmpl",
-		outputPath: "modules/{{.Name}}/internal/infra/config/configs/development.toml"},
-	// Adapters — inbound connect (conditional)
-	{
-		tmplPath:   "templates/module/adapters/inbound/connect/handler.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/adapters/inbound/connect/handler.go",
-		condition:  func(d *ModuleData) bool { return d.WithConnect },
-	},
-	{
-		tmplPath:   "templates/module/adapters/inbound/connect/errors.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/adapters/inbound/connect/errors.go",
-		condition:  func(d *ModuleData) bool { return d.WithConnect },
-	},
-	// Adapters — inbound inproc (conditional: only when Contract)
-	{
-		tmplPath:   "templates/module/adapters/inbound/inproc/adapter.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/adapters/inbound/inproc/adapter.go",
-		condition:  func(d *ModuleData) bool { return d.WithContract },
-	},
-	// Infra — database (conditional)
-	{
-		tmplPath:   "templates/module/infra/migrations/migrations.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/infra/persistence/migrations/migrations.go",
-		condition:  func(d *ModuleData) bool { return d.WithDatabase },
-	},
-	{
-		tmplPath:   "templates/module/infra/migrations/scripts/00001_empty.go.tmpl",
-		outputPath: "modules/{{.Name}}/internal/infra/persistence/migrations/scripts/00001_empty.go",
-		condition:  func(d *ModuleData) bool { return d.WithDatabase },
-	},
-	{
-		tmplPath:   "templates/module/infra/migrations/scripts/00002_empty.sql.tmpl",
-		outputPath: "modules/{{.Name}}/internal/infra/persistence/migrations/scripts/00002_empty.sql",
-		condition:  func(d *ModuleData) bool { return d.WithDatabase },
-	},
-	{
-		tmplPath:   "templates/module/cmd/migrate/main.go.tmpl",
-		outputPath: "modules/{{.Name}}/cmd/{{.Name}}/migrate.go",
-		condition:  func(d *ModuleData) bool { return d.WithDatabase },
-	},
-}
-
-// contractSpecs defines every file generated for a contract definition.
-var contractSpecs = []fileSpec{
-	{tmplPath: "templates/contract/api.go.tmpl", outputPath: "contracts/definitions/{{.Name}}/api.go"},
-	{tmplPath: "templates/contract/dto.go.tmpl", outputPath: "contracts/definitions/{{.Name}}/dto.go"},
-	{tmplPath: "templates/contract/errors.go.tmpl", outputPath: "contracts/definitions/{{.Name}}/errors.go"},
-	{tmplPath: "templates/contract/inproc_client.go.tmpl", outputPath: "contracts/definitions/{{.Name}}/inproc_client.go"},
-	{
-		tmplPath:   "templates/contract/proto.proto.tmpl",
-		outputPath: "contracts/proto/{{.Name}}/v1/{{.Name}}.proto",
-		condition:  func(d *ModuleData) bool { return d.WithConnect },
-	},
-}
-
-// GenerateModule generates all module files for the given options.
-func GenerateModule(opts Options) error {
-	data, err := newModuleData(opts)
+// EmbeddedFS returns the embedded templates as an fs.FS with the "_templates/" prefix stripped.
+func EmbeddedFS() fs.FS {
+	sub, err := fs.Sub(templatesFS, "_templates")
 	if err != nil {
-		return err
+		panic(fmt.Sprintf("scaffold: embedded templates FS error: %v", err))
 	}
-	specs := make([]fileSpec, len(moduleSpecs))
-	copy(specs, moduleSpecs)
-	if opts.WithContract {
-		specs = append(specs, contractSpecs...)
-	}
+	return sub
+}
 
-	return renderSpecs(specs, data, opts.RepoRoot)
+// GenerateModule generates a complete module (and contracts when WithContract=true)
+// by walking fsys and writing rendered files to repoRoot.
+func GenerateModule(fsys fs.FS, repoRoot string, vars map[string]any) error {
+	return generate(fsys, repoRoot, vars, ".")
 }
 
 // GenerateContract generates only the contract definition files.
-func GenerateContract(opts Options) error {
-	data, err := newModuleData(opts)
+func GenerateContract(fsys fs.FS, repoRoot string, vars map[string]any) error {
+	return generate(fsys, repoRoot, vars, "contracts")
+}
+
+type generator struct {
+	manifest *Manifest
+	fsys     fs.FS
+	repoRoot string
+	vars     map[string]any
+}
+
+func generate(fsys fs.FS, repoRoot string, vars map[string]any, root string) error {
+	if name, ok := vars["Name"].(string); !ok || name == "" {
+		return fmt.Errorf("scaffold: Name is required")
+	}
+	m, err := LoadManifest(fsys)
 	if err != nil {
 		return err
 	}
-
-	return renderSpecs(contractSpecs, data, opts.RepoRoot)
+	g := &generator{manifest: m, fsys: fsys, repoRoot: repoRoot, vars: vars}
+	return fs.WalkDir(fsys, root, g.walk)
 }
 
-// renderSpecs executes all applicable fileSpecs.
-func renderSpecs(specs []fileSpec, data *ModuleData, repoRoot string) error {
-	for _, spec := range specs {
-		if spec.condition != nil && !spec.condition(data) {
+func (g *generator) walk(path string, d fs.DirEntry, err error) error {
+	if err != nil {
+		return err
+	}
+	if path == "." || path == "template.toml" {
+		return nil
+	}
+
+	skipped, err := g.isConditionedOut(path)
+	if err != nil {
+		return err
+	}
+	if skipped {
+		if d.IsDir() {
+			return fs.SkipDir
+		}
+		return nil
+	}
+
+	if d.IsDir() {
+		return nil
+	}
+
+	outPath, err := renderString(strings.TrimSuffix(path, ".tmpl"), g.vars)
+	if err != nil {
+		return fmt.Errorf("render path %q: %w", path, err)
+	}
+
+	content, err := fs.ReadFile(g.fsys, path)
+	if err != nil {
+		return fmt.Errorf("read template %q: %w", path, err)
+	}
+
+	rendered, err := renderBytes(path, content, g.vars)
+	if err != nil {
+		return fmt.Errorf("render content of %q: %w", path, err)
+	}
+
+	absPath := filepath.Join(g.repoRoot, outPath)
+	if err := os.MkdirAll(filepath.Dir(absPath), 0755); err != nil {
+		return fmt.Errorf("mkdir for %q: %w", absPath, err)
+	}
+
+	return os.WriteFile(absPath, rendered, 0600)
+}
+
+// isConditionedOut returns true if the file at path should be skipped
+// because a condition in the manifest evaluated to empty/false.
+func (g *generator) isConditionedOut(path string) (bool, error) {
+	for prefix, expr := range g.manifest.Conditions {
+		if !strings.HasPrefix(path, prefix) {
 			continue
 		}
-
-		outPath, err := renderString(spec.outputPath, data)
+		result, err := renderString(expr, g.vars)
 		if err != nil {
-			return fmt.Errorf("render output path %q: %w", spec.outputPath, err)
+			return false, fmt.Errorf("evaluate condition for prefix %q: %w", prefix, err)
 		}
-
-		tmplContent, err := fs.ReadFile(templatesFS, spec.tmplPath)
-		if err != nil {
-			return fmt.Errorf("read template %q: %w", spec.tmplPath, err)
-		}
-
-		rendered, err := renderBytes(spec.tmplPath, tmplContent, data)
-		if err != nil {
-			return fmt.Errorf("render template %q: %w", spec.tmplPath, err)
-		}
-
-		absPath := filepath.Join(repoRoot, outPath)
-		if err := os.MkdirAll(filepath.Dir(absPath), 0755); err != nil {
-			return fmt.Errorf("mkdir %q: %w", filepath.Dir(absPath), err)
-		}
-		if err := os.WriteFile(absPath, rendered, 0600); err != nil {
-			return fmt.Errorf("write %q: %w", absPath, err)
+		if result == "" {
+			return true, nil
 		}
 	}
-
-	return nil
+	return false, nil
 }
 
-// funcMap provides template functions, including Mise-specific ones.
-// These are evaluated during generation and return literal Mise template syntax
-// that will be evaluated by Mise at runtime.
+// funcMap provides template helper functions.
 func funcMap() template.FuncMap {
 	return template.FuncMap{
-		// config_root is a Mise-specific function; we emit it literally for Mise to evaluate
 		"config_root": func() string { return "{{config_root}}" },
-		// Additional Mise functions can be added here as needed
 	}
 }
 
-func renderString(tmplStr string, data *ModuleData) (string, error) {
+func renderString(tmplStr string, data any) (string, error) {
 	t, err := template.New("").Funcs(funcMap()).Parse(tmplStr)
 	if err != nil {
-		return "", fmt.Errorf(`failed to parse template '%s':
- %w`, tmplStr, err)
+		return "", fmt.Errorf("parse template %q: %w", tmplStr, err)
 	}
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf(`failed to execute template '%s' with data '%v': %w`, tmplStr, data, err)
+		return "", fmt.Errorf("execute template %q: %w", tmplStr, err)
 	}
-
 	return buf.String(), nil
 }
 
-func renderBytes(name string, tmplContent []byte, data *ModuleData) ([]byte, error) {
-	t, err := template.New(name).Funcs(funcMap()).Parse(string(tmplContent))
+func renderBytes(name string, content []byte, data any) ([]byte, error) {
+	t, err := template.New(name).Funcs(funcMap()).Parse(string(content))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse template '%s': %w", string(tmplContent), err)
+		return nil, fmt.Errorf("parse template %q: %w", name, err)
 	}
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, data); err != nil {
-		return nil, fmt.Errorf(`failed to execute template '%s'
-with data '%v':
-%w`, string(tmplContent), *data, err)
+		return nil, fmt.Errorf("execute template %q: %w", name, err)
 	}
-
 	return buf.Bytes(), nil
 }

@@ -21,6 +21,9 @@ type Server struct {
 	ShutdownTimeout   time.Duration `mapstructure:"shutdown-timeout"`
 	// For CORS
 	AllowedOrigins []string `mapstructure:"allowed-origins"`
+	// DebugEnabled exposes pprof routes and gRPC reflection.
+	// Controlled via SERVER_DEBUG_ENABLED env var or debug-enabled in TOML.
+	DebugEnabled bool `env:"SERVER_DEBUG_ENABLED" mapstructure:"debug-enabled"`
 }
 
 // SetDefaults ensures the server won't crash if the TOML is missing fields.

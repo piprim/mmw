@@ -11,9 +11,12 @@ import (
 	"net/http/pprof"
 	"runtime/debug"
 
+	"connectrpc.com/grpcreflect"
 	pfconfig "github.com/piprim/mmw/pkg/platform/config"
 	"github.com/piprim/mmw/pkg/platform/middleware"
 	"github.com/rotisserie/eris"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 // HTTPServer is a generic worker that manages the lifecycle of an HTTP server.
@@ -27,12 +30,12 @@ type HTTPServer struct {
 type HealthFns = map[string]func(context.Context) (any, error)
 
 type HTTPServerInfra struct {
-	Config          *pfconfig.Server
-	Handler         http.Handler
-	Logger          *slog.Logger
-	HealthFns       HealthFns
-	LogPayloads     bool
-	WithDebugRoutes bool
+	Config       *pfconfig.Server
+	Handler      http.Handler
+	Logger       *slog.Logger
+	HealthFns    HealthFns
+	LogPayloads  bool
+	ServiceNames []string // fully-qualified gRPC service names for reflection; empty = no reflection
 }
 
 // NewHTTPServer creates a pre-configured server ready to be started.
@@ -59,11 +62,10 @@ func NewHTTPServer(infra HTTPServerInfra) *HTTPServer {
 		_ = json.NewEncoder(w).Encode(msgs)
 	})
 
-	if infra.WithDebugRoutes {
+	if infra.Config.DebugEnabled {
 		mux.HandleFunc("GET /debug/info", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			// json.NewEncoder(w).Encode(map[string]string{"message": "success"})
 			writeProcessInfo(w)
 		})
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
@@ -71,6 +73,12 @@ func NewHTTPServer(infra HTTPServerInfra) *HTTPServer {
 		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+		if len(infra.ServiceNames) > 0 {
+			reflector := grpcreflect.NewStaticReflector(infra.ServiceNames...)
+			mux.Handle(grpcreflect.NewHandlerV1(reflector))
+			mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
+		}
 	}
 
 	// All other requests go to the application handler.
@@ -86,16 +94,21 @@ func NewHTTPServer(infra HTTPServerInfra) *HTTPServer {
 	// Recovery -> Catches panics from inner handlers
 	// CORS -> Handles preflight headers
 	// Mux (Innermost) -> monitoring routes + Connect RPC application
-	finalHandler := loggerMiddleware(recoveryMiddleware(corsMiddleware(mux)))
+	mwHandler := loggerMiddleware(recoveryMiddleware(corsMiddleware(mux)))
+
+	// h2c wraps the entire handler chain so that HTTP/2 cleartext (prior
+	// knowledge) reaches all routes, including gRPC reflection, without
+	// requiring TLS.  Modules pass a plain http.ServeMux as Handler.
+	h2cHandler := h2c.NewHandler(mwHandler, &http2.Server{})
 
 	return &HTTPServer{
 		server: &http.Server{
 			Addr:              addr,
-			Handler:           finalHandler,
+			Handler:           h2cHandler,
 			ReadHeaderTimeout: infra.Config.ReadHeaderTimeout,
 			IdleTimeout:       infra.Config.IdleTimeout,
 		},
-		handler: finalHandler,
+		handler: mwHandler, // plain handler for httptest.NewServer in tests
 		logger:  infra.Logger,
 		cfg:     *infra.Config,
 	}

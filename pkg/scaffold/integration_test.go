@@ -25,16 +25,16 @@ func TestGenerateModule_CompilableOutput(t *testing.T) {
 		filepath.Join(dir, "go.work"),
 	))
 
-	opts := scaffold.Options{
-		Name:          "demomod",
-		OrgPrefix:     "github.com/pivaldi",
-		RepoRoot:      dir,
-		WithConnect:   true,
-		WithContract:  true,
-		WithDatabase: true,
+	fsys := scaffold.EmbeddedFS()
+	vars := map[string]any{
+		"Name":         "demomod",
+		"OrgPrefix":    "github.com/pivaldi",
+		"WithConnect":  true,
+		"WithContract": true,
+		"WithDatabase": true,
 	}
-
-	require.NoError(t, scaffold.GenerateModule(opts))
+	require.NoError(t, scaffold.EnrichVars(vars))
+	require.NoError(t, scaffold.GenerateModule(fsys, dir, vars))
 	require.NoError(t, scaffold.UpdateGoWork(dir, "demomod"))
 
 	// Verify go.work now contains demomod

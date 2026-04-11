@@ -12,16 +12,16 @@ import (
 
 func TestGenerateModule_Minimal(t *testing.T) {
 	dir := t.TempDir()
-	opts := scaffold.Options{
-		Name:          "payment",
-		OrgPrefix:     "github.com/acme",
-		RepoRoot:      dir,
-		WithConnect:   false,
-		WithContract:  false,
-		WithDatabase: false,
+	vars := map[string]any{
+		"Name":         "payment",
+		"OrgPrefix":    "github.com/acme",
+		"WithConnect":  false,
+		"WithContract": false,
+		"WithDatabase": false,
 	}
+	require.NoError(t, scaffold.EnrichVars(vars))
 
-	require.NoError(t, scaffold.GenerateModule(opts))
+	require.NoError(t, scaffold.GenerateModule(scaffold.EmbeddedFS(), dir, vars))
 
 	// Base files always present
 	assertFileExists(t, dir, "modules/payment/go.mod")
@@ -66,16 +66,16 @@ func TestGenerateModule_Minimal(t *testing.T) {
 
 func TestGenerateModule_WithAllOptions(t *testing.T) {
 	dir := t.TempDir()
-	opts := scaffold.Options{
-		Name:          "billing",
-		OrgPrefix:     "github.com/acme",
-		RepoRoot:      dir,
-		WithConnect:   true,
-		WithContract:  true,
-		WithDatabase: true,
+	vars := map[string]any{
+		"Name":         "billing",
+		"OrgPrefix":    "github.com/acme",
+		"WithConnect":  true,
+		"WithContract": true,
+		"WithDatabase": true,
 	}
+	require.NoError(t, scaffold.EnrichVars(vars))
 
-	require.NoError(t, scaffold.GenerateModule(opts))
+	require.NoError(t, scaffold.GenerateModule(scaffold.EmbeddedFS(), dir, vars))
 
 	// Connect adapter present
 	assertFileExists(t, dir, "modules/billing/internal/adapters/inbound/connect/handler.go")
@@ -88,7 +88,7 @@ func TestGenerateModule_WithAllOptions(t *testing.T) {
 
 	// Migration present
 	assertFileExists(t, dir, "modules/billing/internal/infra/persistence/migrations/migrations.go")
-	assertFileExists(t, dir, "modules/billing/cmd/billing/migrate.go")
+	assertFileExists(t, dir, "modules/billing/cmd/migration/main.go")
 
 	// Contract present
 	assertFileExists(t, dir, "contracts/definitions/billing/api.go")
@@ -104,15 +104,16 @@ func TestGenerateModule_WithAllOptions(t *testing.T) {
 
 func TestGenerateModule_WithContractNoConnect(t *testing.T) {
 	dir := t.TempDir()
-	opts := scaffold.Options{
-		Name:         "inventory",
-		OrgPrefix:    "github.com/acme",
-		RepoRoot:     dir,
-		WithConnect:  false,
-		WithContract: true,
+	vars := map[string]any{
+		"Name":         "inventory",
+		"OrgPrefix":    "github.com/acme",
+		"WithConnect":  false,
+		"WithContract": true,
+		"WithDatabase": false,
 	}
+	require.NoError(t, scaffold.EnrichVars(vars))
 
-	require.NoError(t, scaffold.GenerateModule(opts))
+	require.NoError(t, scaffold.GenerateModule(scaffold.EmbeddedFS(), dir, vars))
 
 	// Contract present
 	assertFileExists(t, dir, "contracts/definitions/inventory/api.go")
@@ -129,14 +130,16 @@ func TestGenerateModule_WithContractNoConnect(t *testing.T) {
 
 func TestGenerateContract(t *testing.T) {
 	dir := t.TempDir()
-	opts := scaffold.Options{
-		Name:        "shipping",
-		OrgPrefix:   "github.com/acme",
-		RepoRoot:    dir,
-		WithConnect: true,
+	vars := map[string]any{
+		"Name":         "shipping",
+		"OrgPrefix":    "github.com/acme",
+		"WithConnect":  true,
+		"WithContract": true,
+		"WithDatabase": false,
 	}
+	require.NoError(t, scaffold.EnrichVars(vars))
 
-	require.NoError(t, scaffold.GenerateContract(opts))
+	require.NoError(t, scaffold.GenerateContract(scaffold.EmbeddedFS(), dir, vars))
 
 	assertFileExists(t, dir, "contracts/definitions/shipping/api.go")
 	assertFileExists(t, dir, "contracts/definitions/shipping/dto.go")
@@ -146,7 +149,7 @@ func TestGenerateContract(t *testing.T) {
 }
 
 func TestGenerateModule_EmptyName(t *testing.T) {
-	err := scaffold.GenerateModule(scaffold.Options{RepoRoot: t.TempDir()})
+	err := scaffold.GenerateModule(scaffold.EmbeddedFS(), t.TempDir(), map[string]any{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Name")
 }

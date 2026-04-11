@@ -2,8 +2,8 @@ package new
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
 
 	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
@@ -20,67 +20,62 @@ var (
 )
 
 func NewModuleCmd() *cobra.Command {
-	return &cobra.Command{
+	var templatePath string
+
+	cmd := &cobra.Command{
 		Use:   "module",
 		Short: "Scaffold a new module interactively",
-		RunE:  runNewModule,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return runNewModule(templatePath)
+		},
 	}
+	cmd.Flags().StringVar(&templatePath, "template", "", "Path to an external template directory (default: embedded templates)")
+
+	return cmd
 }
 
-// TODO: Ask module go.mod repository
-func runNewModule(_ *cobra.Command, _ []string) error {
-	var name string
-	var withConnect, withContract, withDatabase = true, true, true
+func runNewModule(templatePath string) error {
+	root := platform.RootRepo()
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Module Name").
-				Description("The name used to generate the module in module/<name>.").Value(&name),
-		),
-		huh.NewGroup(
-			huh.NewConfirm().
-				// Inline(true).
-				Title("Expose via Connect RPC (HTTP)?").
-				Description(" -- Generates the Connect handler + proto file.").
-				Value(&withConnect),
-			huh.NewConfirm().
-				// Inline(true).
-				Title("Generate contract definition?").
-				Description(" -- Generates contracts/definitions/"+name+"/ for in-process clients.").
-				Value(&withContract),
-			huh.NewConfirm().
-				// Inline(true).
-				Title("Is this module need database connection?").
-				Description(" -- Generates cmd/"+name+"/migrate.go and migrations/ directory, etc.").
-				Value(&withDatabase),
-		),
-	)
+	fsys, err := selectTemplateFS(templatePath)
+	if err != nil {
+		return err
+	}
 
-	if err := form.Run(); err != nil {
+	m, err := scaffold.LoadManifest(fsys)
+	if err != nil {
+		return fmt.Errorf("load manifest: %w", err)
+	}
+
+	// Seed OrgPrefix default from contracts/go.mod detection.
+	for i, v := range m.Variables {
+		if v.Name == "OrgPrefix" {
+			detected := detectOrgPrefix(root)
+			if detected != "" {
+				m.Variables[i].Default = detected
+			}
+		}
+	}
+
+	vars, err := collectVars(m)
+	if err != nil {
 		return fmt.Errorf("prompt cancelled: %w", err)
 	}
 
-	root := platform.RootRepo()
-	opts := scaffold.Options{
-		Name:      name,
-		RepoRoot:  root,
-		OrgPrefix: detectOrgPrefix(root),
+	if err := scaffold.EnrichVars(vars); err != nil {
+		return err
 	}
 
-	opts.WithConnect = withConnect
-	opts.WithContract = withContract
-	opts.WithDatabase = withDatabase
+	name, _ := vars["Name"].(string)
 
-	if err := scaffold.GenerateModule(opts); err != nil {
+	if err := scaffold.GenerateModule(fsys, root, vars); err != nil {
 		return fmt.Errorf("generate module: %w", err)
 	}
 
-	if err := scaffold.UpdateGoWork(opts.RepoRoot, name); err != nil {
+	if err := scaffold.UpdateGoWork(root, name); err != nil {
 		_, _ = errorC.Fprintf(os.Stderr, "warning: could not update go.work: %v\n", err)
 	}
-
-	if err := scaffold.UpdateMiseToml(opts.RepoRoot, name); err != nil {
+	if err := scaffold.UpdateMiseToml(root, name); err != nil {
 		_, _ = errorC.Fprintf(os.Stderr, "warning: could not update mise.toml: %v\n", err)
 	}
 
@@ -89,66 +84,115 @@ func runNewModule(_ *cobra.Command, _ []string) error {
 	infoC.Printf("  - cd modules/%s && go mod tidy\n", name)
 	infoC.Println("  - cd <repo-root> && mise run stow && go work sync")
 
+	withContract, _ := vars["WithContract"].(bool)
 	if withContract {
 		infoC.Println("  - cd contracts && buf generate")
 	}
-
 	infoC.Println("  - Wire the module in cmd/mmw/main.go")
 
 	return nil
 }
 
-// detectOrgPrefix reads the contracts go.mod to derive the org prefix.
-// Falls back to "github.com/pivaldi" if detection fails.
-func detectOrgPrefix(repoRoot string) string {
-	const fbRepo = "github.com/pivaldi"
-	contractsGoMod := filepath.Join(repoRoot, "contracts", "go.mod")
-	data, err := os.ReadFile(contractsGoMod)
+// selectTemplateFS returns the embedded FS (default) or an OS directory FS.
+func selectTemplateFS(templatePath string) (fs.FS, error) {
+	if templatePath == "" {
+		return scaffold.EmbeddedFS(), nil
+	}
+	info, err := os.Stat(templatePath)
 	if err != nil {
-		return fbRepo
+		return nil, fmt.Errorf("template path %q: %w", templatePath, err)
 	}
-	for _, line := range splitLines(string(data)) {
-		if len(line) <= 7 || line[:7] != "module " {
-			continue
-		}
-		mod := line[7:]
-		parts := splitPath(mod)
-
-		if len(parts) >= 2 {
-			return parts[0] + "/" + parts[1]
-		}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("template path %q is not a directory", templatePath)
 	}
 
-	return fbRepo
+	return os.DirFS(templatePath), nil
 }
 
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i, c := range s {
-		if c == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
+// collectVars builds and runs a huh form from the manifest variables,
+// returning a PascalCase-keyed map of collected values.
+func collectVars(m *scaffold.Manifest) (map[string]any, error) {
+	vars := make(map[string]any, len(m.Variables))
+
+	// Pre-populate with defaults so all keys exist before the form runs.
+	for _, v := range m.Variables {
+		vars[v.Name] = v.Default
+	}
+
+	// Use pointer-backed approach: each field writes into a dedicated pointer.
+	// After the form runs, the pointers contain the final values.
+	type binding struct {
+		name  string
+		apply func()
+	}
+	var bindings []binding
+	var fields []huh.Field
+
+	for i := range m.Variables {
+		v := m.Variables[i]
+		switch v.Kind {
+		case scaffold.KindText:
+			val := ""
+			if s, ok := v.Default.(string); ok {
+				val = s
+			}
+			ptr := &val
+			fields = append(fields, huh.NewInput().
+				Title(v.Name).
+				Value(ptr).
+				Validate(func(s string) error {
+					if v.Default.(string) == "" && s == "" {
+						return fmt.Errorf("%s is required", v.Name)
+					}
+					return nil
+				}),
+			)
+			name := v.Name
+			bindings = append(bindings, binding{name: name, apply: func() { vars[name] = *ptr }})
+
+		case scaffold.KindBool:
+			val := false
+			if b, ok := v.Default.(bool); ok {
+				val = b
+			}
+			ptr := &val
+			fields = append(fields, huh.NewConfirm().
+				Title(v.Name).
+				Value(ptr),
+			)
+			name := v.Name
+			bindings = append(bindings, binding{name: name, apply: func() { vars[name] = *ptr }})
+
+		case scaffold.KindChoice:
+			choices, _ := v.Default.([]string)
+			opts := make([]huh.Option[string], len(choices))
+			for j, c := range choices {
+				opts[j] = huh.NewOption(c, c)
+			}
+			val := ""
+			if len(choices) > 0 {
+				val = choices[0]
+			}
+			ptr := &val
+			fields = append(fields, huh.NewSelect[string]().
+				Title(v.Name).
+				Options(opts...).
+				Value(ptr),
+			)
+			name := v.Name
+			bindings = append(bindings, binding{name: name, apply: func() { vars[name] = *ptr }})
 		}
 	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
+
+	form := huh.NewForm(huh.NewGroup(fields...))
+	if err := form.Run(); err != nil {
+		return nil, err
 	}
 
-	return lines
-}
-
-func splitPath(s string) []string {
-	var parts []string
-	start := 0
-	for i, c := range s {
-		if c == '/' {
-			parts = append(parts, s[start:i])
-			start = i + 1
-		}
+	// Apply bindings: write pointer values into the vars map.
+	for _, b := range bindings {
+		b.apply()
 	}
 
-	parts = append(parts, s[start:])
-
-	return parts
+	return vars, nil
 }

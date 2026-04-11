@@ -1,0 +1,19 @@
+# MMW module scaffolding manifest — cookiecutter-style
+# Variable names support: hyphen-case, snake_case, camelCase
+# All normalize to PascalCase in templates (e.g. with-connect → .WithConnect)
+
+[variables]
+name          = ""
+org-prefix    = "github.com/acme"
+with-connect  = true
+with-contract = true
+with-database = true
+license       = ["MIT", "BSD-3", "GNU GPL v3.0", "Apache Software License 2.0"]
+
+[conditions]
+"modules/{{.Name}}/internal/adapters/inbound/connect"     = "{{if .WithConnect}}true{{end}}"
+"modules/{{.Name}}/internal/adapters/inbound/inproc"      = "{{if .WithContract}}true{{end}}"
+"modules/{{.Name}}/internal/infra/persistence/migrations" = "{{if .WithDatabase}}true{{end}}"
+"modules/{{.Name}}/cmd/migration"                         = "{{if .WithDatabase}}true{{end}}"
+"contracts/definitions"                                   = "{{if .WithContract}}true{{end}}"
+"contracts/proto"                                         = "{{if and .WithContract .WithConnect}}true{{end}}"
