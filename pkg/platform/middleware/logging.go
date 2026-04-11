@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,6 +34,14 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
+// Flush delegates to the underlying ResponseWriter's Flush if it implements
+// http.Flusher. Required by gRPC/Connect streaming handlers.
+func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // Catch implicit 200 OK responses!
 func (rw *responseWriter) Write(b []byte) (int, error) {
 	if !rw.wroteHeader {
@@ -55,8 +64,12 @@ func LoggingMiddleware(logger *slog.Logger, logPayloads bool) Middleware {
 			var err error
 			var fields []any
 
-			// Only log the body for POST, PUT, PATCH (where a body is expected)
-			if logPayloads &&
+			// Only log the body for POST, PUT, PATCH (where a body is expected).
+			// Skip gRPC/Connect streams: their bodies are open for the duration of
+			// the call and io.ReadAll would block until the stream closes.
+			isGRPC := strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") ||
+				strings.HasPrefix(r.Header.Get("Content-Type"), "application/connect")
+			if logPayloads && !isGRPC &&
 				(r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch) {
 				body, err = io.ReadAll(r.Body)
 				if err != nil {
