@@ -19,8 +19,7 @@ func NewErrorLoggingInterceptor(logger *slog.Logger) connect.UnaryInterceptorFun
 				// mapDomainError wraps the original error in a *connect.Error.
 				// Unwrap it to recover the eris chain with its stack trace.
 				errToLog := err
-				var connectErr *connect.Error
-				if errors.As(err, &connectErr) {
+				if connectErr, ok := errors.AsType[*connect.Error](err); ok {
 					if cause := connectErr.Unwrap(); cause != nil {
 						errToLog = cause
 					}

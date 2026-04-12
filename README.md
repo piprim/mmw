@@ -14,16 +14,190 @@ Everything a module needs to participate in the monolith.
 
 #### Module lifecycle
 
+`mmw core` library defines the contract that every module must implement:
+
 ```go
-// core.Module is the contract every module implements.
 type Module interface {
     Start(ctx context.Context) error
 }
+```
 
+Each module defines and exposes his own module:
+
+```go
+type Infrastructure struct {
+	DBPool     *pgxpool.Pool
+	EventBus   pfevents.SystemEventBus
+	Subscriber message.Subscriber
+	AuthSvc    defauth.AuthPrivateService
+	Logger     *slog.Logger
+}
+
+func New(infra Infrastructure) (*Module, error) {
+	// Load the config
+	cfg, err := config.Load(context.Background(), "")
+	// Handle err
+
+	// newApplicationService builds the infrastructure adapters (repository, outbox dispatcher,
+	// unit of work) and wires them into the TodoApplicationService.
+	todoService := newApplicationService(infra)
+
+	// newEventRouter creates the Watermill message router and registers all inbound event
+	// handlers for the Todo module.
+	router, err := newEventRouter(infra)
+	// Handle err
+
+	// newHTTPServer mounts the Connect RPC handler on an HTTP mux (automatically wrapped with
+	// platform middlewares by the platform), inject an token validator, wraps with an error
+	// logging interceptor handling domain errors,
+	// then returns a pre-configured HTTPServer ready to be started.
+	httpServer := newHTTPServer(cfg, infra, todoService)
+
+	return &Module{
+		// Outbox relay: polls todo.event every 2 s and forwards rows to the SystemEventBus.
+		relay:   pfoutbox.NewEnventsRelay(infra.DBPool, infra.EventBus, infra.Logger, relayTableName),
+		server:  httpServer,
+		router:  router,
+		logger:  infra.Logger,
+		service: todoService,
+	}, nil
+}
+
+// Start implements the module contract with a blocking process.
+func (m *Module) Start(ctx context.Context) error {
+	m.logger.Info("starting the app")
+
+	// Package errgroup provides synchronization, error propagation, and Context
+	// cancellation for groups of goroutines working on subtasks of a common task.
+	g, gCtx := errgroup.WithContext(ctx)
+
+	// Start the HTTP server
+	g.Go(func() error {
+		return m.server.Start(gCtx)
+	})
+
+	// Start the Outbox relay
+	if m.relay != nil {
+		g.Go(func() error {
+			m.relay.Start(gCtx)
+
+			return nil
+		})
+	}
+
+	// Start the Watermill message router triggering Todo module handlers for inbound event handlers.
+	g.Go(func() error {
+		return m.router.Run(gCtx)
+	})
+
+	// Wait until the context is cancled or a goroutine returns an error or panics.
+	err := g.Wait()
+
+	return eris.Wrapf(err, "%s failure", ModuleName)
+}
+```
+
+The `main.go` simplified:
+
+```go
+func main() {
+	// signal.NotifyContext cancels ctx on SIGINT / SIGTERM, which propagates a
+	// graceful-shutdown signal to every running module via platform.Run.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	var dbPool *pgxpool.Pool
+
+	defer func() {
+		if dbPool != nil {
+			dbPool.Close()
+		}
+		cancel()
+		os.Exit(exitCode)
+	}()
+
+	// initObservability loads the application config and creates the structured logger.
+	// If config.ServerDebugEnabled is true, it also starts a pprof server on localhost:6060 in the background.
+	// Both resources are derived from config, so they belong together.
+	config, logger, err := initObservability(ctx)
+	// Handle error
+
+	dbPool, err = getDatabasePoolConnexion(ctx, logger, config.MainDatabase.URL())
+	// Handle error
+
+	// Creates the in-process Watermill GoChannel and wraps it in the
+	// platform SystemEventBus interface.
+	// rawBus is the concrete GoChannel used directly by modules that need a
+	// message.Subscriber (e.g. the todo module's event router, the notifications
+	// module). eventBus is the publishing interface passed to every module so they
+	// can emit domain events without depending on the Watermill type.
+	rawBus := getRawbus(logger)
+	eventBus := pfevents.NewWatermillBus(rawBus)
+	defer rawBus.Close()
+
+	// initModules wires and returns all application modules in dependency order.
+	modules, err := initModules(logger, dbPool, rawBus, eventBus)
+	if err != nil {
+		return
+	}
+
+	// platform.Run launches every module in its own goroutine via errgroup and
+	// blocks until the context is cancelled or one module fails.
+	logger.Info("Platform startup…")
+	if err = platform.New(logger, modules).Run(ctx); err != nil {
+		logError(logger, "platform error", err)
+	}
+}
+
+// initModules wires and returns all application modules in dependency order.
+//
+// Ordering matters: auth must be initialised before todo because todo's Connect
+// handler requires an AuthPrivateService to validate JWT tokens. Notifications
+// subscribes to topics from both auth and todo, so it is initialised last.
+func initModules(
+	logger *slog.Logger,
+	dbPool *pgxpool.Pool,
+	rawBus *gochannel.GoChannel,
+	eventBus pfevents.SystemEventBus,
+) ([]pfcore.Module, error) {
+	// 1. Auth — no inter-module dependencies.
+	authModule, err := auth.New(auth.Infrastructure{
+		DBPool:   dbPool,
+		EventBus: eventBus,
+		Logger:   logger.With("module", auth.ModuleName),
+	})
+	// Handle error
+
+	// 2. Todo — depends on auth's private service to validate bearer tokens.
+	todoModule, err := todo.New(todo.Infrastructure{
+		DBPool:     dbPool,
+		EventBus:   eventBus,
+		Subscriber: rawBus,
+		Logger:     logger.With("module", todo.ModuleName),
+		AuthSvc:    authModule.PrivateService(),
+	})
+	// Handle error
+
+	// 3. Notifications — subscribes to domain events from both auth and todo.
+	//    The topic list is built by merging the two modules' exported topic slices.
+	notifModule, err := notifications.New(notifications.Infrastructure{
+		Subscriber:  rawBus,
+		Logger:      logger.With("module", notifications.ModuleName),
+		Topics:      append(tododef.Topics, authdef.Topics...),
+		WithNotifer: true,
+	})
+	// Handle error
+
+	return []pfcore.Module{todoModule, authModule, notifModule}, nil
+}
+```
+
+
+```go
 // platform.New wires modules together and runs them concurrently.
 app := platform.New(logger, []core.Module{todoModule, authModule, notifModule})
 err := app.Run(ctx) // blocks; cancels all modules when ctx is done or one fails
 ```
+
+
 
 `App.Run` launches every module in its own goroutine via `errgroup`. A failure in any module cancels the shared context and returns the first error.
 
@@ -56,6 +230,87 @@ Routes available when `Config.DebugEnabled = true`:
 
 Middleware chain (outside → in): **Logger → Recovery → CORS → Mux**. The whole chain is wrapped in `h2c` for HTTP/2 cleartext support (required by Connect RPC).
 
+#### Middleware (`pkg/platform/middleware`)
+
+All middleware follows the standard `func(http.Handler) http.Handler` shape, aliased as `Middleware`. The four built-in pieces are composed by `server.NewHTTPServer` in the order shown above; modules can also apply individual middlewares directly to specific routes.
+
+**`LoggingMiddleware`**
+
+Logs every request after it completes using structured `slog`. Generates or propagates an `X-Request-ID` header (UUID) and stores it in the request context so downstream handlers and the recovery middleware can correlate logs.
+
+Log level is derived from the response status code:
+
+| Status range | Log level |
+|---|---|
+| < 404 | `INFO` |
+| 404 | `WARN` |
+| ≥ 500 | `ERROR` |
+
+When `logPayloads` is `true`, the raw request body is captured and appended to the log entry (capped at 10 000 bytes). Bodies are **not** captured for gRPC/Connect streams (`Content-Type: application/grpc*` or `application/connect*`) because reading a streaming body would block the handler.
+
+```go
+middleware.LoggingMiddleware(logger, logPayloads bool) Middleware
+```
+
+**`RecoveryMiddleware`**
+
+Catches any `panic` that escapes a handler, wraps it in an `eris` error to capture the full stack trace, logs it at `ERROR` level with the correlated `request_id`, and writes a generic `500` JSON response. The stack trace is never forwarded to the client.
+
+```go
+middleware.RecoveryMiddleware(logger) Middleware
+```
+
+**`CORSMiddleware`**
+
+Configures CORS using the `rs/cors` library with the allowed methods, headers, and exposed headers required by Connect RPC and gRPC-Web (sourced from `connectrpc.com/cors`). Allowed origins default to `cfg.Host`; the `AllowedOrigins` slice in `config.Server` overrides this.
+
+```go
+middleware.CORSMiddleware(cfg *config.Server) Middleware
+// Preflight cache: 7200 s
+```
+
+**`BearerAuthMiddleware`**
+
+Enforces bearer-token authentication on every route not in `excludedPaths` (all `/debug/` paths are also always exempt). On a valid token it injects the authenticated user's UUID into the request context via `authctx.WithUserID` so application handlers can read it without depending on HTTP concerns.
+
+```go
+type TokenValidator func(ctx context.Context, token string) (uuid.UUID, error)
+
+middleware.BearerAuthMiddleware(validate TokenValidator, logger, excludedPaths []string) Middleware
+```
+
+`TokenValidator` is a plain function type — modules provide their own implementation, typically a closure over the auth module's private service:
+
+```go
+func NewTokenValidator(svc defauth.AuthPrivateService) pfmiddleware.TokenValidator {
+    return func(ctx context.Context, token string) (uuid.UUID, error) {
+        resp, err := svc.ValidateToken(ctx, &authv1.ValidateTokenRequest{Token: token})
+        if err != nil {
+            return uuid.Nil, err
+        }
+        return uuid.Parse(resp.GetUserId())
+    }
+}
+
+// Applied per-route:
+authMiddleware := pfmiddleware.BearerAuthMiddleware(NewTokenValidator(infra.AuthSvc), logger, nil)
+mux.Handle(path, authMiddleware(handler))
+```
+
+On any failure (missing header, empty token, validation error) the middleware writes HTTP 401 with a Connect-compatible JSON body and does **not** call the next handler:
+
+```json
+{"code":"unauthenticated","message":"missing or invalid token"}
+```
+
+**`GetRequestID`**
+
+Reads the request ID injected by `LoggingMiddleware` from any context downstream:
+
+```go
+reqID := middleware.GetRequestID(r.Context())
+```
+
 #### Events
 
 ```go
@@ -80,10 +335,57 @@ waterMillRouter.AddConsumerHandler(
 
 #### Transactional outbox
 
-```go
-relay := outbox.NewEnventsRelay(pool, eventBus, logger, "todo_events")
-// relay implements core.Module — polls the outbox table every 2 s and forwards events to the bus
+The transactional outbox pattern solves the dual-write problem: without it, a command handler that both saves domain state *and* publishes an event to a message bus risks leaving the two out of sync if a crash or network error occurs between the two writes.
+
+**How it works:**
+
+Instead of publishing directly to the bus, the command handler writes events into an outbox table *inside the same database transaction* as the domain state change. Publishing to the bus is then delegated to a background relay that polls the table. Because both writes share a transaction, they either both commit or both roll back — the domain state and the pending events are always consistent.
+
 ```
+Command handler (inside a DB transaction)
+  ├── UPDATE todo SET ...          ← domain state
+  └── INSERT INTO todo.event ...  ← outbox row (same tx)
+
+EventsRelay (background, every 2 s)
+  ├── SELECT ... FOR UPDATE SKIP LOCKED  ← fetch unpublished rows, lock them
+  ├── bus.Publish(eventType, payload)    ← forward to SystemEventBus
+  └── UPDATE todo.event SET published_at = NOW() ← mark done, commit
+```
+
+**Writing to the outbox — `PostgresOutboxDispatcher`:**
+
+The dispatcher is the write side. It receives `[]domain.DomainEvent` collected during a command, serialises each to JSON (or Protobuf JSON when a proto mapping exists), and inserts the batch into the outbox table via `pgx.Batch`. Because it uses the `UnitOfWork` executor, the inserts automatically join the ambient transaction if one is active:
+
+```go
+err = c.unitOfWork.WithTransaction(ctx, func(txCtx context.Context) error {
+    if err := c.repository.Save(txCtx, todo); err != nil {  // domain write
+        return err
+    }
+    return c.eventDispatcher.Dispatch(txCtx, todo.Events()) // outbox write — same tx
+})
+```
+
+**Reading from the outbox — `EventsRelay`:**
+
+The relay is the read side. It runs as a `core.Module` goroutine, ticking every 2 seconds:
+
+1. Opens a transaction and selects up to 100 unpublished rows with `FOR UPDATE SKIP LOCKED` — this prevents two relay instances from processing the same row simultaneously (safe to run multiple replicas).
+2. Publishes each event to the `SystemEventBus`. If publishing fails the transaction is rolled back, leaving the rows unlocked for the next tick.
+3. Marks successfully published rows with `published_at = NOW()` and commits.
+
+```go
+relay := outbox.NewEnventsRelay(pool, eventBus, logger, "todo.event")
+// relay implements core.Module — pass it to platform.New alongside the HTTP server
+```
+
+**Guarantees and trade-offs:**
+
+| Property | Detail |
+|---|---|
+| At-least-once delivery | A crash between `Publish` and the `UPDATE` causes the relay to retry the row on the next tick. Consumers must be idempotent. |
+| Ordering | Rows are fetched `ORDER BY occurred_at ASC`, preserving intra-aggregate event order within a batch. |
+| Latency | Up to 2 s between domain write and bus publication (configurable). |
+| Back-pressure | The relay processes at most 100 rows per tick; a large backlog drains at 50 rows/s at the default interval. |
 
 #### PostgreSQL utilities
 
@@ -127,6 +429,42 @@ err = c.unitOfWork.WithTransaction(ctx, func(txCtx context.Context) error {
 })
 ```
 
+**`StructArgs`** — reflects a struct's `db`-tagged fields into a `map[string]any` for use as named query parameters with `pgx.NamedArgs`. This keeps SQL queries readable with `@param` placeholders and removes the need to maintain a parallel positional argument list whenever the struct changes.
+
+Define a snapshot struct with `db` tags (one tag per column name):
+
+```go
+type TodoSnapshot struct {
+    ID          uuid.UUID  `db:"id"`
+    Title       string     `db:"title"`
+    Description string     `db:"description"`
+    Status      string     `db:"status"`
+    DueDate     *time.Time `db:"due_date"`   // pointer → NULL when nil
+    UserID      uuid.UUID  `db:"user_id"`
+    // ...
+}
+```
+
+Pass it to `StructArgs` and cast to `pgx.NamedArgs`:
+
+```go
+query := `INSERT INTO todo.todo (id, title, description, status, due_date, user_id)
+          VALUES (@id, @title, @description, @status, @due_date, @user_id)`
+
+_, err := exec.Exec(ctx, query, pgx.NamedArgs(pfdb.StructArgs(todo.Snapshot())))
+```
+
+Tag rules:
+
+| Tag value | Behaviour |
+|---|---|
+| `db:"col_name"` | included as `{"col_name": value}` |
+| `db:"-"` | skipped |
+| `db:"col_name,omitempty"` | included — `omitempty` is parsed but ignored (the DB handles `NULL` natively) |
+| *(no tag)* | skipped |
+
+`StructArgs` dereferences pointer receivers, so `StructArgs(&snap)` and `StructArgs(snap)` are equivalent. It panics if the value (after dereferencing) is not a struct.
+
 **Database migrator** — wraps goose for structured migration execution.
 
 #### Auth context
@@ -163,11 +501,161 @@ authMiddleware := pfmiddleware.BearerAuthMiddleware(connecthandler.NewTokenValid
 mux.Handle(path, authMiddleware(handler))
 ```
 
+#### Connect interceptors (`pkg/platform/connect`)
+
+**`NewErrorLoggingInterceptor`**
+
+A `connect.UnaryInterceptorFunc` that logs every handler error after the call returns, without altering the response seen by the client.
+
+```go
+connect.WithInterceptors(pfconnect.NewErrorLoggingInterceptor(logger))
+```
+
+**Why it exists — the wrapping problem**
+
+Connect RPC handlers are expected to return `*connect.Error` values (with a gRPC status code) so the framework can serialise the error correctly for the client. This means each handler converts application-layer errors before returning:
+
+```go
+func (h *TodoHandler) CreateTodo(ctx context.Context, req *connect.Request[...]) (..., error) {
+    todo, err := h.service.CreateTodo(ctx, &appReq)
+    if err != nil {
+        return nil, connectErrorFrom(err) // wraps into *connect.Error
+    }
+    // ...
+}
+```
+
+`connectErrorFrom` (module-side) maps a `platform.DomainError` to the appropriate Connect code and attaches a typed proto error detail for clients:
+
+```
+application error (DomainError{Code: NotFound, ...})
+    └─► connectErrorFrom
+            └─► *connect.Error{code: CodeNotFound, detail: commonv1.DomainError{...}}
+```
+
+The wrapping discards the `eris` stack trace: `*connect.Error` does not carry it. The interceptor unwraps the `*connect.Error` to recover the original cause and logs the full stack trace before the wrapped error propagates to the framework:
+
+```go
+var connectErr *connect.Error
+if errors.As(err, &connectErr) {
+    if cause := connectErr.Unwrap(); cause != nil {
+        errToLog = cause // original eris error, stack trace intact
+    }
+}
+logger.Error("handler error", "procedure", req.Spec().Procedure, "err", errToLog)
+```
+
+**Error flow summary**
+
+```
+Handler returns connectErrorFrom(err)
+    │
+    ├── Interceptor fires (post-call)
+    │     ├── unwraps *connect.Error → recovers eris cause
+    │     └── logs procedure + full stack trace at ERROR
+    │
+    └── Connect framework serialises *connect.Error → HTTP response
+          (client sees gRPC code + proto detail, never the stack trace)
+```
+
+The interceptor is registered when building the Connect handler in `todo.go`:
+
+```go
+path, handler := todov1connect.NewTodoServiceHandler(
+    connecthandler.NewTodoHandler(todoService),
+    connect.WithInterceptors(pfconnect.NewErrorLoggingInterceptor(infra.Logger)),
+)
+```
+
 #### Structured logging
 
 ```go
 logger, err := slog.New(slog.HandlerText, config.LogLevel.SlogLevel())
 // slog.HandlerText or slog.HandlerJSON; integrates with lmittmann/tint for coloured output
+```
+
+#### Configuration (`pkg/platform/config`)
+
+Layered configuration loader that combines embedded TOML files with environment variables.
+
+**Loading order** (later sources win):
+1. `configs/default.toml` — required baseline
+2. `configs/<APP_ENV>.toml` — optional environment-specific overrides (e.g. `configs/development.toml`)
+3. Environment variables — highest priority, applied last
+
+**Defining a module config:**
+
+Embed the TOML files and implement the `Config` interface. `Base` provides a ready-made implementation that reads `APP_ENV` from the environment:
+
+```go
+//go:embed configs/*.toml
+var configFS embed.FS
+
+type Config struct {
+    config.Base                            // provides GetAppEnv() from APP_ENV env var
+    Server      *pfconfig.Server          `mapstructure:"server"`
+    MainDatabase pfconfig.Database        `mapstructure:"main-database"`
+    LogLevel    LogLevel                   `mapstructure:"log-level"`
+}
+
+func Load(ctx context.Context, envPrefix string) (*Config, error) {
+    cfg := &Config{}
+    err := config.NewContext(ctx, configFS, envPrefix).Fill(cfg)
+    return cfg, err
+}
+```
+
+**Struct tags:**
+
+| Tag | Source | Example |
+|---|---|---|
+| `mapstructure:"<key>"` | TOML file (kebab-case) | `mapstructure:"main-database"` |
+| `env:"<VAR>"` | Environment variable | `env:"DB_PASSWORD"` |
+| `env:"<VAR>, required"` | Required env var (error if missing) | `env:"APP_ENV, required"` |
+
+**Built-in config types:**
+
+`Database` — assembles a `postgres://` URL from individual fields; the password is sourced exclusively from `DB_PASSWORD` env var and excluded from JSON serialisation:
+
+```go
+type Database struct {
+    Scheme   string `mapstructure:"scheme"`
+    User     string `mapstructure:"user"`
+    Password string `env:"DB_PASSWORD" json:"-"`
+    Host     string `mapstructure:"host"`
+    Port     Port   `mapstructure:"port"`
+    Name     string `mapstructure:"name"`
+    SSLMode  string `mapstructure:"sslmode"`
+}
+
+dbURL := cfg.MainDatabase.URL() // → "postgres://user:pass@host:5432/dbname?sslmode=disable"
+```
+
+`Server` — configures the platform HTTP server; safe defaults are applied by `SetDefaults()` if TOML fields are absent:
+
+```go
+type Server struct {
+    Scheme            string        `mapstructure:"scheme"`
+    Host              string        `mapstructure:"host"`
+    Port              Port          `mapstructure:"port"`
+    ReadHeaderTimeout time.Duration `mapstructure:"read-header-timeout"` // default: 5s
+    IdleTimeout       time.Duration `mapstructure:"idle-timeout"`        // default: 120s
+    ShutdownTimeout   time.Duration `mapstructure:"shutdown-timeout"`    // default: 30s
+    AllowedOrigins    []string      `mapstructure:"allowed-origins"`
+    DebugEnabled      bool          `env:"SERVER_DEBUG_ENABLED" mapstructure:"debug-enabled"`
+}
+```
+
+`Environment` — typed string enum with `IsDev()` / `IsValid()` helpers and `UnmarshalText` support; valid values are `development`, `staging`, `production`, `testing`.
+
+**Testing:** swap the embedded FS for an in-memory `fstest.MapFS` to avoid touching the filesystem:
+
+```go
+mockFS := fstest.MapFS{
+    "configs/default.toml": &fstest.MapFile{Data: []byte(`[server]\nport = 8080`)},
+}
+cfg := &MyConfig{}
+err := config.NewContext(ctx, mockFS, "").Fill(cfg)
 ```
 
 ---
