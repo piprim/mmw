@@ -180,11 +180,12 @@ func printTable(w io.Writer, rows []row) {
 // --- Command ---
 
 type options struct {
-	packages string
-	short    bool
-	run      string
-	timeout  string
-	min      float64
+	tags []string
+	// packages string
+	short   bool
+	run     string
+	timeout string
+	min     float64
 }
 
 func NewCoverageCmd() *cobra.Command {
@@ -208,28 +209,37 @@ Pass --min to enforce a minimum coverage threshold and exit with a
 non-zero status if any package with tests falls below it.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return run(cmd, opts)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return run(cmd, opts, args)
 		},
 	}
 
 	f := cmd.Flags()
-	f.StringVarP(&opts.packages, "packages", "p", "./...", "package pattern passed to go test")
+	// f.StringVarP(&opts.packages, "packages", "p", "./...", "package pattern passed to go test")
 	f.BoolVarP(&opts.short, "short", "s", false, "pass -short to go test (skips integration tests)")
 	f.StringVarP(&opts.run, "run", "r", "", "pass -run <regex> to go test (filter test names)")
 	f.StringVarP(&opts.timeout, "timeout", "t", "", "pass -timeout <duration> to go test (e.g. 30s, 2m)")
 	f.Float64VarP(&opts.min, "min", "m", 0, "exit 1 if any tested package is below this coverage %")
+	f.StringSliceVarP(&opts.tags, "tags", "", []string{}, "a comma-separated list of additional test tags")
 
 	return cmd
 }
 
-func run(cmd *cobra.Command, opts *options) error {
+func run(cmd *cobra.Command, opts *options, args []string) error {
 	module, err := moduleFromGoMod()
 	if err != nil {
 		return fmt.Errorf("could not determine module name: %w", err)
 	}
 
-	testArgs := []string{"test", opts.packages, "-cover"}
+	packages := args
+	if len(args) == 0 {
+		packages = []string{"./..."}
+	}
+
+	testArgs := []string{"test"}
+	testArgs = append(testArgs, packages...)
+	testArgs = append(testArgs, "-cover")
+
 	if opts.short {
 		testArgs = append(testArgs, "-short")
 	}
@@ -238,6 +248,10 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	if opts.timeout != "" {
 		testArgs = append(testArgs, "-timeout", opts.timeout)
+	}
+
+	if len(opts.tags) > 0 {
+		testArgs = append(testArgs, "-tags", strings.Join(opts.tags, ","))
 	}
 
 	// Exit code of "go test" is intentionally ignored: a failing test suite

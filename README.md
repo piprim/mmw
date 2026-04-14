@@ -708,13 +708,20 @@ err = scaffold.GenerateContract(fsys, repoRoot, vars)
 
 ```toml
 [variables]
-name          = ""         # text input (empty = required)
-org-prefix    = "github.com/acme"  # text with default
-with-connect  = true       # bool confirm
-license       = ["MIT", "BSD-3"]   # select (first = default)
+name          = ""                                                              # text input (empty = required)
+org-prefix    = "github.com/acme"                                              # text with default
+with-connect  = true                                                           # bool confirm
+with-contract = true                                                           # bool confirm
+with-database = true                                                           # bool confirm
+license       = ["MIT", "BSD-3", "GNU GPL v3.0", "Apache Software License 2.0"] # select (first = default)
 
 [conditions]
-"modules/{{.Name}}/internal/adapters/inbound/connect" = "{{if .WithConnect}}true{{end}}"
+"modules/{{.Name}}/internal/adapters/inbound/connect"     = "{{if .WithConnect}}true{{end}}"
+"modules/{{.Name}}/internal/adapters/inbound/inproc"      = "{{if .WithContract}}true{{end}}"
+"modules/{{.Name}}/internal/infra/persistence/migrations" = "{{if .WithDatabase}}true{{end}}"
+"modules/{{.Name}}/cmd/migration"                         = "{{if .WithDatabase}}true{{end}}"
+"contracts/go/application"                                = "{{if .WithContract}}true{{end}}"
+"contracts/proto"                                         = "{{if and .WithContract .WithConnect}}true{{end}}"
 ```
 
 Variable names normalise automatically: `with-connect`, `with_connect`, and `withConnect` all map to `.WithConnect` in templates.
@@ -727,7 +734,7 @@ Variable names normalise automatically: `with-connect`, `with_connect`, and `wit
 mmw new module [--template <path>]   Scaffold a new module interactively
 mmw new contract <name>              Generate a contract definition
 mmw check arch                       Validate architectural boundaries
-mmw test coverage [flags]            Print a test coverage table
+mmw test coverage [flags] [packages] Print a test coverage table
 ```
 
 ### `mmw new module`
@@ -769,7 +776,6 @@ Flags:
 
 | Flag | Default | Description |
 |---|---|---|
-| `-p`, `--packages` | `./...` | Package pattern |
 | `-s`, `--short` | `false` | Pass `-short` to skip integration tests |
 | `-r`, `--run` | | Filter test names by regex |
 | `-t`, `--timeout` | | Set test timeout (e.g. `2m`) |
