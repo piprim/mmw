@@ -14,11 +14,11 @@ type ContractPurityValidator struct {
 	RepoRoot     string
 }
 
-func (v *ContractPurityValidator) Name() string {
+func (*ContractPurityValidator) Name() string {
 	return "contract-definition-purity"
 }
 
-func (v *ContractPurityValidator) Description() string {
+func (*ContractPurityValidator) Description() string {
 	return "Contract definition modules must not depend on service modules or import internal packages"
 }
 
@@ -69,7 +69,7 @@ func (v *ContractPurityValidator) collectServiceModules() (map[string]bool, erro
 	goWorkPath := filepath.Join(v.RepoRoot, "go.work")
 	content, err := os.ReadFile(goWorkPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read go.work: %w", err)
 	}
 
 	absServicesDir, _ := filepath.Abs(filepath.Join(v.RepoRoot, "modules"))
@@ -100,7 +100,9 @@ func (v *ContractPurityValidator) collectServiceModules() (map[string]bool, erro
 // checkGoModPurity verifies the contract's go.mod has no dependencies on
 // service modules. Protocol/transport libraries (connectrpc, protobuf, etc.)
 // are allowed — they are part of the API contract definition.
-func (v *ContractPurityValidator) checkGoModPurity(contractPath, contractName string, forbiddenModules map[string]bool) error {
+func (*ContractPurityValidator) checkGoModPurity(
+	contractPath, contractName string, forbiddenModules map[string]bool,
+) error {
 	if len(forbiddenModules) == 0 {
 		return nil
 	}
@@ -119,44 +121,47 @@ func (v *ContractPurityValidator) checkGoModPurity(contractPath, contractName st
 
 		if strings.HasPrefix(line, "require (") {
 			inRequire = true
+
 			continue
 		}
 		if inRequire && line == ")" {
 			inRequire = false
+
 			continue
 		}
 
-		if inRequire || strings.HasPrefix(line, "require ") {
-			if strings.Contains(line, "// indirect") || strings.HasPrefix(line, "//") {
-				continue
-			}
+		if !inRequire && !strings.HasPrefix(line, "require ") {
+			continue
+		}
+		if strings.Contains(line, "// indirect") || strings.HasPrefix(line, "//") {
+			continue
+		}
 
-			parts := strings.Fields(line)
-			if len(parts) == 0 {
-				continue
-			}
-			modulePath := parts[0]
+		parts := strings.Fields(line)
+		if len(parts) == 0 {
+			continue
+		}
+		modulePath := parts[0]
 
-			if forbiddenModules[modulePath] {
-				return fmt.Errorf(
-					"contracts/definitions/%s depends on service module: %s\n\n"+
-						"Contract definition modules must not depend on service modules.\n"+
-						"They may only depend on:\n"+
-						"  - Standard library\n"+
-						"  - Protocol/transport libraries (connectrpc, protobuf, grpc, etc.)\n"+
-						"  - Basic utility types (uuid, etc.)\n"+
-						"  - Other contract definition modules",
-					contractName, modulePath,
-				)
-			}
+		if forbiddenModules[modulePath] {
+			return fmt.Errorf(
+				"contracts/definitions/%s depends on service module: %s\n\n"+
+					"Contract definition modules must not depend on service modules.\n"+
+					"They may only depend on:\n"+
+					"  - Standard library\n"+
+					"  - Protocol/transport libraries (connectrpc, protobuf, grpc, etc.)\n"+
+					"  - Basic utility types (uuid, etc.)\n"+
+					"  - Other contract definition modules",
+				contractName, modulePath,
+			)
 		}
 	}
 
 	return nil
 }
 
-func (v *ContractPurityValidator) checkNoInternalImports(contractPath, contractName string) error {
-	return filepath.Walk(contractPath, func(path string, info os.FileInfo, err error) error {
+func (*ContractPurityValidator) checkNoInternalImports(contractPath, contractName string) error {
+	if err := filepath.Walk(contractPath, func(path string, _ os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -168,7 +173,7 @@ func (v *ContractPurityValidator) checkNoInternalImports(contractPath, contractN
 		fset := token.NewFileSet()
 		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
 		if err != nil {
-			return err
+			return fmt.Errorf("parse %q: %w", path, err)
 		}
 
 		for _, imp := range f.Imports {
@@ -189,5 +194,9 @@ func (v *ContractPurityValidator) checkNoInternalImports(contractPath, contractN
 		}
 
 		return nil
-	})
+	}); err != nil {
+		return fmt.Errorf("walk contract %q: %w", contractPath, err)
+	}
+
+	return nil
 }

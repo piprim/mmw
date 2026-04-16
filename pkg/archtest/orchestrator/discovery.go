@@ -21,7 +21,7 @@ func DiscoverServices(servicesDir, archTaskName string) ([]Service, error) {
 		return nil, fmt.Errorf("failed to read services directory: %w", err)
 	}
 
-	var services []Service
+	services := make([]Service, 0, len(entries))
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -58,7 +58,7 @@ func hasMiseArchCheck(miseTomlPath, archTaskName string) (bool, error) {
 	}
 	defer file.Close()
 
-	doubleQuoted := fmt.Sprintf(`"%s"`, archTaskName)
+	doubleQuoted := fmt.Sprintf("%q", archTaskName)
 	singleQuoted := fmt.Sprintf("'%s'", archTaskName)
 
 	scanner := bufio.NewScanner(file)

@@ -32,6 +32,7 @@ func RunAll(repoRoot string) int {
 	)
 	if err != nil {
 		rep.PrintCheck("discovery", "Discover modules with arch:check task", err)
+
 		return rep.Summary()
 	}
 	for _, svc := range services {

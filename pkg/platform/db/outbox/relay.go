@@ -46,6 +46,7 @@ func (r *EventsRelay) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			r.logger.Info("shutting down outbox relay worker")
+
 			return
 		case <-ticker.C:
 			if err := r.processBatch(ctx); err != nil {

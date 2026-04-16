@@ -19,7 +19,7 @@ type erisPostPrintHandler struct {
 	slog.Handler
 }
 
-//nolint:gocritic // because it implements slog.Handle interface
+//nolint:gocritic // hugeParam: slog.Handler interface mandates value receiver for slog.Record
 func (h *erisPostPrintHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Call the underlying handler FIRST. This prints the standard log line.
 	err := h.Handler.Handle(ctx, r)
@@ -100,14 +100,14 @@ func IOTxtHandler(
 type HandlerType int
 
 const (
-	HandlerJson HandlerType = iota
+	HandlerJSON HandlerType = iota
 	HandlerText
 )
 
 func New(handlerType HandlerType, logLevel slog.Level) (*slog.Logger, error) {
 	replaceErr := func(_ []string, a slog.Attr) slog.Attr {
 		if err, isError := a.Value.Any().(error); isError {
-			if handlerType == HandlerJson {
+			if handlerType == HandlerJSON {
 				return slog.Any(a.Key, eris.ToJSON(err, true))
 			}
 
@@ -117,7 +117,7 @@ func New(handlerType HandlerType, logLevel slog.Level) (*slog.Logger, error) {
 		return a
 	}
 
-	if handlerType == HandlerJson {
+	if handlerType == HandlerJSON {
 		handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			Level:       logLevel,
 			ReplaceAttr: replaceErr,

@@ -3,6 +3,7 @@ package scaffold
 import (
 	"bytes"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -20,6 +21,7 @@ func EmbeddedFS() fs.FS {
 	if err != nil {
 		panic(fmt.Sprintf("scaffold: embedded templates FS error: %v", err))
 	}
+
 	return sub
 }
 
@@ -43,19 +45,24 @@ type generator struct {
 
 func generate(fsys fs.FS, repoRoot string, vars map[string]any, root string) error {
 	if name, ok := vars["Name"].(string); !ok || name == "" {
-		return fmt.Errorf("scaffold: Name is required")
+		return errors.New("scaffold: Name is required")
 	}
 	m, err := LoadManifest(fsys)
 	if err != nil {
 		return err
 	}
 	g := &generator{manifest: m, fsys: fsys, repoRoot: repoRoot, vars: vars}
-	return fs.WalkDir(fsys, root, g.walk)
+
+	if err := fs.WalkDir(fsys, root, g.walk); err != nil {
+		return fmt.Errorf("walk template %q: %w", root, err)
+	}
+
+	return nil
 }
 
-func (g *generator) walk(path string, d fs.DirEntry, err error) error {
-	if err != nil {
-		return err
+func (g *generator) walk(path string, d fs.DirEntry, walkErr error) error {
+	if walkErr != nil {
+		return walkErr
 	}
 	if path == "." || path == "template.toml" {
 		return nil
@@ -69,6 +76,7 @@ func (g *generator) walk(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
 			return fs.SkipDir
 		}
+
 		return nil
 	}
 
@@ -96,7 +104,11 @@ func (g *generator) walk(path string, d fs.DirEntry, err error) error {
 		return fmt.Errorf("mkdir for %q: %w", absPath, err)
 	}
 
-	return os.WriteFile(absPath, rendered, 0600)
+	if err := os.WriteFile(absPath, rendered, 0600); err != nil {
+		return fmt.Errorf("write %q: %w", absPath, err)
+	}
+
+	return nil
 }
 
 // isConditionedOut returns true if the file at path should be skipped
@@ -114,6 +126,7 @@ func (g *generator) isConditionedOut(path string) (bool, error) {
 			return true, nil
 		}
 	}
+
 	return false, nil
 }
 
@@ -133,6 +146,7 @@ func renderString(tmplStr string, data any) (string, error) {
 	if err := t.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("execute template %q: %w", tmplStr, err)
 	}
+
 	return buf.String(), nil
 }
 
@@ -145,5 +159,6 @@ func renderBytes(name string, content []byte, data any) ([]byte, error) {
 	if err := t.Execute(&buf, data); err != nil {
 		return nil, fmt.Errorf("execute template %q: %w", name, err)
 	}
+
 	return buf.Bytes(), nil
 }

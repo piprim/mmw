@@ -26,6 +26,7 @@ func TestPort_String(t *testing.T) {
 }
 
 func TestBase_GetAppEnv(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
 	b := &Base{Environment: EnvironmentProduction}
 	stringer := b.GetAppEnv()
 
@@ -34,6 +35,7 @@ func TestBase_GetAppEnv(t *testing.T) {
 }
 
 func TestBase_GetAppEnv_Development(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
 	b := &Base{Environment: EnvironmentDevelopment}
 	assert.Equal(t, "development", b.GetAppEnv().String())
 }

@@ -27,7 +27,12 @@ func UpdateGoWork(repoRoot, name string) error {
 		return errors.New("could not find use block in go.work")
 	}
 
-	return os.WriteFile(goWorkPath, []byte(updated), 0600)
+	//nolint:gosec // G703: Path traversal is safe here
+	if err := os.WriteFile(goWorkPath, []byte(updated), 0600); err != nil {
+		return fmt.Errorf("write go.work: %w", err)
+	}
+
+	return nil
 }
 
 // UpdateMiseToml adds test/build tasks for the new module to poc/mise.toml.
@@ -57,5 +62,10 @@ description = "Run contract tests for %s module"
 run = "cd modules/%s && mise run test:contract"
 `, name, name, name, name, name, name, name, name, name)
 
-	return os.WriteFile(misePath, append(content, []byte(addition)...), 0600)
+	//nolint:gosec // G703: Path traversal is safe here
+	if err := os.WriteFile(misePath, append(content, []byte(addition)...), 0600); err != nil {
+		return fmt.Errorf("write mise.toml: %w", err)
+	}
+
+	return nil
 }

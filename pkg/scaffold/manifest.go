@@ -3,7 +3,8 @@ package scaffold
 import (
 	"fmt"
 	"io/fs"
-	"sort"
+	"slices"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -52,8 +53,8 @@ func LoadManifest(fsys fs.FS) (*Manifest, error) {
 		m.Variables = append(m.Variables, v)
 	}
 
-	sort.Slice(m.Variables, func(i, j int) bool {
-		return m.Variables[i].Name < m.Variables[j].Name
+	slices.SortFunc(m.Variables, func(a, b Variable) int {
+		return strings.Compare(a.Name, b.Name)
 	})
 
 	return m, nil
@@ -82,5 +83,6 @@ func parseVariable(rawName string, val any) (Variable, error) {
 	default:
 		return Variable{}, fmt.Errorf("variable %q: unsupported type %T (use string, bool, or []string)", rawName, val)
 	}
+
 	return v, nil
 }

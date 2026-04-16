@@ -12,6 +12,7 @@ func EnvMap() map[string]string {
 		for i := 0; i < len(e); i++ {
 			if e[i] == '=' {
 				m[e[:i]] = e[i+1:]
+
 				break
 			}
 		}

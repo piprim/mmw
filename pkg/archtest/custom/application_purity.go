@@ -11,9 +11,9 @@ type ApplicationPurityValidator struct {
 	ModulesDir string
 }
 
-func (v *ApplicationPurityValidator) Name() string { return "application-purity" }
+func (*ApplicationPurityValidator) Name() string { return "application-purity" }
 
-func (v *ApplicationPurityValidator) Description() string {
+func (*ApplicationPurityValidator) Description() string {
 	return "internal/application/ must not import contracts/ (proto concerns belong in adapters)"
 }
 
@@ -23,6 +23,7 @@ func (v *ApplicationPurityValidator) Check() error {
 		if os.IsNotExist(err) {
 			return nil
 		}
+
 		return fmt.Errorf("read modules dir: %w", err)
 	}
 
@@ -38,5 +39,6 @@ func (v *ApplicationPurityValidator) Check() error {
 			return err
 		}
 	}
+
 	return nil
 }

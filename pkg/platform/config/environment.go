@@ -39,6 +39,7 @@ func (e Environment) String() string {
 // part of the allowed enumerated values
 func (e Environment) IsValid() bool {
 	_, err := ParseEnvironment(string(e))
+
 	return err == nil
 }
 

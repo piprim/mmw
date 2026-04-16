@@ -8,7 +8,10 @@ import (
 	"time"
 )
 
-const checkTimeout = 10 * time.Minute
+const (
+	checkTimeout = 10 * time.Minute
+	trustTimeout = 30 * time.Second
+)
 
 // CheckResult represents the result of running arch:check on a service
 type CheckResult struct {
@@ -20,7 +23,7 @@ type CheckResult struct {
 // RunServiceCheck executes mise run arch:check for a service
 func RunServiceCheck(servicePath, serviceName string) CheckResult {
 	// First, trust the mise.toml file in this directory
-	trustCtx, trustCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	trustCtx, trustCancel := context.WithTimeout(context.Background(), trustTimeout)
 	defer trustCancel()
 
 	trustCmd := exec.CommandContext(trustCtx, "mise", "trust")

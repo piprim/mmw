@@ -12,10 +12,10 @@ const (
 	minDatabaseURLLength = 20
 )
 
-func GetPgxPool(ctx context.Context, logger *slog.Logger, dbUrl string) (*pgxpool.Pool, error) {
-	logger.Info("connecting to database", "url", maskDatabaseURL(dbUrl))
+func GetPgxPool(ctx context.Context, logger *slog.Logger, dbURL string) (*pgxpool.Pool, error) {
+	logger.Info("connecting to database", "url", maskDatabaseURL(dbURL))
 
-	dbPool, err := pgxpool.New(ctx, dbUrl)
+	dbPool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
 		return nil, eris.Wrap(err, "connecting to database")
 	}

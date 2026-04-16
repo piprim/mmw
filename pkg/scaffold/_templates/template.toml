@@ -15,5 +15,5 @@ license       = ["MIT", "BSD-3", "GNU GPL v3.0", "Apache Software License 2.0"]
 "modules/{{.Name}}/internal/adapters/inbound/inproc"      = "{{if .WithContract}}true{{end}}"
 "modules/{{.Name}}/internal/infra/persistence/migrations" = "{{if .WithDatabase}}true{{end}}"
 "modules/{{.Name}}/cmd/migration"                         = "{{if .WithDatabase}}true{{end}}"
-"contracts/definitions"                                   = "{{if .WithContract}}true{{end}}"
+"contracts/go/application"                                = "{{if .WithContract}}true{{end}}"
 "contracts/proto"                                         = "{{if and .WithContract .WithConnect}}true{{end}}"

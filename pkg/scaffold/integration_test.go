@@ -44,7 +44,7 @@ func TestGenerateModule_CompilableOutput(t *testing.T) {
 	// Verify key files generated
 	assertFileExists(t, dir, "modules/demomod/go.mod")
 	assertFileExists(t, dir, "modules/demomod/demomodmod.go")
-	assertFileExists(t, dir, "contracts/definitions/demomod/api.go")
+	assertFileExists(t, dir, "contracts/go/application/demomod/api.go")
 	assertFileExists(t, dir, "contracts/proto/demomod/v1/demomod.proto")
 	assertFileExists(t, dir, "modules/demomod/internal/infra/persistence/migrations/migrations.go")
 

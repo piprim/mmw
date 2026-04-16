@@ -29,7 +29,10 @@ func NewModuleCmd() *cobra.Command {
 			return runNewModule(templatePath)
 		},
 	}
-	cmd.Flags().StringVar(&templatePath, "template", "", "Path to an external template directory (default: embedded templates)")
+	cmd.Flags().StringVar(
+		&templatePath, "template", "",
+		"Path to an external template directory (default: embedded templates)",
+	)
 
 	return cmd
 }
@@ -49,11 +52,13 @@ func runNewModule(templatePath string) error {
 
 	// Seed OrgPrefix default from contracts/go.mod detection.
 	for i, v := range m.Variables {
-		if v.Name == "OrgPrefix" {
-			detected := detectOrgPrefix(root)
-			if detected != "" {
-				m.Variables[i].Default = detected
-			}
+		if v.Name != "OrgPrefix" {
+			continue
+		}
+
+		detected := detectOrgPrefix(root)
+		if detected != "" {
+			m.Variables[i].Default = detected
 		}
 	}
 
@@ -63,7 +68,7 @@ func runNewModule(templatePath string) error {
 	}
 
 	if err := scaffold.EnrichVars(vars); err != nil {
-		return err
+		return fmt.Errorf("enrich vars: %w", err)
 	}
 
 	name, _ := vars["Name"].(string)
@@ -109,6 +114,12 @@ func selectTemplateFS(templatePath string) (fs.FS, error) {
 	return os.DirFS(templatePath), nil
 }
 
+// binding pairs a variable name with a function that copies its pointer value into vars.
+type binding struct {
+	name  string
+	apply func()
+}
+
 // collectVars builds and runs a huh form from the manifest variables,
 // returning a PascalCase-keyed map of collected values.
 func collectVars(m *scaffold.Manifest) (map[string]any, error) {
@@ -119,80 +130,78 @@ func collectVars(m *scaffold.Manifest) (map[string]any, error) {
 		vars[v.Name] = v.Default
 	}
 
-	// Use pointer-backed approach: each field writes into a dedicated pointer.
-	// After the form runs, the pointers contain the final values.
-	type binding struct {
-		name  string
-		apply func()
-	}
 	var bindings []binding
 	var fields []huh.Field
 
 	for i := range m.Variables {
-		v := m.Variables[i]
-		switch v.Kind {
-		case scaffold.KindText:
-			val := ""
-			if s, ok := v.Default.(string); ok {
-				val = s
-			}
-			ptr := &val
-			fields = append(fields, huh.NewInput().
-				Title(v.Name).
-				Value(ptr).
-				Validate(func(s string) error {
-					if v.Default.(string) == "" && s == "" {
-						return fmt.Errorf("%s is required", v.Name)
-					}
-					return nil
-				}),
-			)
-			name := v.Name
-			bindings = append(bindings, binding{name: name, apply: func() { vars[name] = *ptr }})
-
-		case scaffold.KindBool:
-			val := false
-			if b, ok := v.Default.(bool); ok {
-				val = b
-			}
-			ptr := &val
-			fields = append(fields, huh.NewConfirm().
-				Title(v.Name).
-				Value(ptr),
-			)
-			name := v.Name
-			bindings = append(bindings, binding{name: name, apply: func() { vars[name] = *ptr }})
-
-		case scaffold.KindChoice:
-			choices, _ := v.Default.([]string)
-			opts := make([]huh.Option[string], len(choices))
-			for j, c := range choices {
-				opts[j] = huh.NewOption(c, c)
-			}
-			val := ""
-			if len(choices) > 0 {
-				val = choices[0]
-			}
-			ptr := &val
-			fields = append(fields, huh.NewSelect[string]().
-				Title(v.Name).
-				Options(opts...).
-				Value(ptr),
-			)
-			name := v.Name
-			bindings = append(bindings, binding{name: name, apply: func() { vars[name] = *ptr }})
+		f, b := buildField(m.Variables[i], vars)
+		if f != nil {
+			fields = append(fields, f)
+			bindings = append(bindings, b)
 		}
 	}
 
-	form := huh.NewForm(huh.NewGroup(fields...))
-	if err := form.Run(); err != nil {
-		return nil, err
+	if err := huh.NewForm(huh.NewGroup(fields...)).Run(); err != nil {
+		return nil, fmt.Errorf("form cancelled: %w", err)
 	}
 
-	// Apply bindings: write pointer values into the vars map.
 	for _, b := range bindings {
 		b.apply()
 	}
 
 	return vars, nil
+}
+
+// buildField constructs a huh.Field and its binding for a single manifest variable.
+func buildField(v scaffold.Variable, vars map[string]any) (huh.Field, binding) {
+	name := v.Name
+
+	switch v.Kind {
+	case scaffold.KindText:
+		val := ""
+		if s, ok := v.Default.(string); ok {
+			val = s
+		}
+		ptr := &val
+		field := huh.NewInput().
+			Title(name).
+			Value(ptr).
+			Validate(func(s string) error {
+				if def, _ := v.Default.(string); def == "" && s == "" {
+					return fmt.Errorf("%s is required", name)
+				}
+
+				return nil
+			})
+
+		return field, binding{name: name, apply: func() { vars[name] = *ptr }}
+
+	case scaffold.KindBool:
+		val := false
+		if b, ok := v.Default.(bool); ok {
+			val = b
+		}
+		ptr := &val
+		field := huh.NewConfirm().Title(name).Value(ptr)
+
+		return field, binding{name: name, apply: func() { vars[name] = *ptr }}
+
+	case scaffold.KindChoice:
+		choices, _ := v.Default.([]string)
+		opts := make([]huh.Option[string], len(choices))
+		for j, c := range choices {
+			opts[j] = huh.NewOption(c, c)
+		}
+		val := ""
+		if len(choices) > 0 {
+			val = choices[0]
+		}
+		ptr := &val
+		field := huh.NewSelect[string]().Title(name).Options(opts...).Value(ptr)
+
+		return field, binding{name: name, apply: func() { vars[name] = *ptr }}
+
+	default:
+		return nil, binding{}
+	}
 }

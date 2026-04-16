@@ -56,6 +56,17 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	return i, nil
 }
 
+func httpLogLevel(status int) slog.Level {
+	if status >= http.StatusInternalServerError {
+		return slog.LevelError
+	}
+	if status >= http.StatusNotFound {
+		return slog.LevelWarn
+	}
+
+	return slog.LevelInfo
+}
+
 // LoggingMiddleware returns a runner.Middleware that logs every request.
 func LoggingMiddleware(logger *slog.Logger, logPayloads bool) Middleware {
 	return func(next http.Handler) http.Handler {
@@ -94,13 +105,7 @@ func LoggingMiddleware(logger *slog.Logger, logPayloads bool) Middleware {
 			next.ServeHTTP(wrapped, r.WithContext(ctx))
 			duration := time.Since(start)
 
-			// Use appropriate log level based on status code
-			lvl := slog.LevelInfo
-			if wrapped.status >= http.StatusInternalServerError {
-				lvl = slog.LevelError
-			} else if wrapped.status >= http.StatusNotFound {
-				lvl = slog.LevelWarn
-			}
+			lvl := httpLogLevel(wrapped.status)
 
 			fields = []any{
 				"request_id", requestID,

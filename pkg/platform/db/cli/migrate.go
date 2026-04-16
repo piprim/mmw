@@ -191,6 +191,7 @@ func migrateResetCmd(ctx context.Context, m *migrator.Migrator) *cobra.Command {
 			choiceStr = strings.ToLower(strings.TrimSpace(choiceStr))
 			if choiceStr != "yes" {
 				_, _ = fmt.Println("\nWise decision. See you later…")
+
 				return nil
 			}
 

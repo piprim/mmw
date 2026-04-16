@@ -61,7 +61,7 @@ func TestGenerateModule_Minimal(t *testing.T) {
 	assertFileNotExists(t, dir, "modules/payment/internal/infra/persistence/migrations/migrations.go")
 
 	// Contract NOT present (WithContract: false)
-	assertFileNotExists(t, dir, "contracts/definitions/payment/api.go")
+	assertFileNotExists(t, dir, "contracts/go/application/payment/api.go")
 }
 
 func TestGenerateModule_WithAllOptions(t *testing.T) {
@@ -91,11 +91,11 @@ func TestGenerateModule_WithAllOptions(t *testing.T) {
 	assertFileExists(t, dir, "modules/billing/cmd/migration/main.go")
 
 	// Contract present
-	assertFileExists(t, dir, "contracts/definitions/billing/api.go")
-	assertFileExists(t, dir, "contracts/definitions/billing/dto.go")
-	assertFileExists(t, dir, "contracts/definitions/billing/errors.go")
-	assertFileExists(t, dir, "contracts/definitions/billing/inproc_client.go")
-	assertFileContains(t, dir, "contracts/definitions/billing/api.go", "type BillingService interface")
+	assertFileExists(t, dir, "contracts/go/application/billing/api.go")
+	assertFileExists(t, dir, "contracts/go/application/billing/dto.go")
+	assertFileExists(t, dir, "contracts/go/application/billing/errors.go")
+	assertFileExists(t, dir, "contracts/go/application/billing/inproc_client.go")
+	assertFileContains(t, dir, "contracts/go/application/billing/api.go", "type BillingService interface")
 
 	// Proto present (WithConnect + WithContract)
 	assertFileExists(t, dir, "contracts/proto/billing/v1/billing.proto")
@@ -116,7 +116,7 @@ func TestGenerateModule_WithContractNoConnect(t *testing.T) {
 	require.NoError(t, scaffold.GenerateModule(scaffold.EmbeddedFS(), dir, vars))
 
 	// Contract present
-	assertFileExists(t, dir, "contracts/definitions/inventory/api.go")
+	assertFileExists(t, dir, "contracts/go/application/inventory/api.go")
 
 	// Proto NOT present (no Connect)
 	assertFileNotExists(t, dir, "contracts/proto/inventory/v1/inventory.proto")
@@ -141,10 +141,10 @@ func TestGenerateContract(t *testing.T) {
 
 	require.NoError(t, scaffold.GenerateContract(scaffold.EmbeddedFS(), dir, vars))
 
-	assertFileExists(t, dir, "contracts/definitions/shipping/api.go")
-	assertFileExists(t, dir, "contracts/definitions/shipping/dto.go")
-	assertFileExists(t, dir, "contracts/definitions/shipping/errors.go")
-	assertFileExists(t, dir, "contracts/definitions/shipping/inproc_client.go")
+	assertFileExists(t, dir, "contracts/go/application/shipping/api.go")
+	assertFileExists(t, dir, "contracts/go/application/shipping/dto.go")
+	assertFileExists(t, dir, "contracts/go/application/shipping/errors.go")
+	assertFileExists(t, dir, "contracts/go/application/shipping/inproc_client.go")
 	assertFileExists(t, dir, "contracts/proto/shipping/v1/shipping.proto")
 }
 

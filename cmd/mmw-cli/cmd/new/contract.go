@@ -43,7 +43,7 @@ func runNewContract(name, templatePath string) error {
 		"WithDatabase": false,
 	}
 	if err := scaffold.EnrichVars(vars); err != nil {
-		return err
+		return fmt.Errorf("enrich vars: %w", err)
 	}
 
 	if err := scaffold.GenerateContract(fsys, root, vars); err != nil {

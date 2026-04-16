@@ -13,7 +13,7 @@ import (
 )
 
 func TestNew_JSONHandler(t *testing.T) {
-	logger, err := New(HandlerJson, slog.LevelInfo)
+	logger, err := New(HandlerJSON, slog.LevelInfo)
 	require.NoError(t, err)
 	assert.NotNil(t, logger)
 }
@@ -26,7 +26,7 @@ func TestNew_TextHandler(t *testing.T) {
 
 func TestNew_AllLevels(t *testing.T) {
 	for _, level := range []slog.Level{slog.LevelDebug, slog.LevelInfo, slog.LevelWarn, slog.LevelError} {
-		logger, err := New(HandlerJson, level)
+		logger, err := New(HandlerJSON, level)
 		require.NoError(t, err)
 		assert.NotNil(t, logger)
 	}

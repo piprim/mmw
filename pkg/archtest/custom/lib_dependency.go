@@ -73,58 +73,79 @@ func (v *LibDependencyValidator) collectNonLibWorkspaceModules(libModules map[st
 	goWorkPath := filepath.Join(v.RepoRoot, "go.work")
 	f, err := os.Open(goWorkPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open go.work: %w", err)
 	}
 	defer f.Close()
 
 	absLibsDir, err := filepath.Abs(v.LibsDir)
 	if err != nil {
+		return nil, fmt.Errorf("abs libs dir: %w", err)
+	}
+
+	absMmwDir, err := v.absMMWDir()
+	if err != nil {
 		return nil, err
 	}
 
-	absMmwDir := ""
-	if v.MmwDir != "" {
-		abs, err := filepath.Abs(v.MmwDir)
-		if err != nil {
-			return nil, fmt.Errorf("resolve MmwDir %q: %w", v.MmwDir, err)
-		}
-		absMmwDir = abs
-	}
-
-	forbidden := map[string]bool{}
+	forbidden := make(map[string]bool)
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "use ") {
-			continue
-		}
-		relPath := strings.TrimPrefix(line, "use ")
-		relPath = strings.Trim(relPath, `"`)
-		absPath, err := filepath.Abs(filepath.Join(v.RepoRoot, relPath))
-		if err != nil {
-			continue
-		}
-
-		// Skip if this module lives under the libs directory
-		if strings.HasPrefix(absPath+string(filepath.Separator), absLibsDir+string(filepath.Separator)) {
-			continue
-		}
-
-		// Skip if this module lives under mmw/ (treated as a lib)
-		if absMmwDir != "" && strings.HasPrefix(absPath+string(filepath.Separator), absMmwDir+string(filepath.Separator)) {
-			continue
-		}
-
-		name, err := readModuleName(filepath.Join(absPath, "go.mod"))
-		if err != nil || name == "" {
-			continue
-		}
-		if !libModules[name] {
-			forbidden[name] = true
-		}
+		v.scanUseLine(scanner.Text(), absLibsDir, absMmwDir, libModules, forbidden)
 	}
 
-	return forbidden, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return forbidden, fmt.Errorf("scan go.work: %w", err)
+	}
+
+	return forbidden, nil
+}
+
+func (v *LibDependencyValidator) absMMWDir() (string, error) {
+	if v.MmwDir == "" {
+		return "", nil
+	}
+
+	abs, err := filepath.Abs(v.MmwDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve MmwDir %q: %w", v.MmwDir, err)
+	}
+
+	return abs, nil
+}
+
+func (v *LibDependencyValidator) scanUseLine(
+	rawLine, absLibsDir, absMmwDir string, libModules, forbidden map[string]bool,
+) {
+	line := strings.TrimSpace(rawLine)
+	if !strings.HasPrefix(line, "use ") {
+		return
+	}
+
+	relPath := strings.TrimPrefix(line, "use ")
+	relPath = strings.Trim(relPath, `"`)
+
+	absPath, err := filepath.Abs(filepath.Join(v.RepoRoot, relPath))
+	if err != nil {
+		return
+	}
+
+	sep := string(filepath.Separator)
+	if strings.HasPrefix(absPath+sep, absLibsDir+sep) {
+		return
+	}
+
+	if absMmwDir != "" && strings.HasPrefix(absPath+sep, absMmwDir+sep) {
+		return
+	}
+
+	name, err := readModuleName(filepath.Join(absPath, "go.mod"))
+	if err != nil || name == "" {
+		return
+	}
+
+	if !libModules[name] {
+		forbidden[name] = true
+	}
 }
 
 // checkWithRootModule is the fallback when go.work is not available.
@@ -139,24 +160,25 @@ func (v *LibDependencyValidator) checkWithRootModule(entries []os.DirEntry) erro
 			continue
 		}
 		libPath := filepath.Join(v.LibsDir, entry.Name())
-		err := filepath.Walk(libPath, func(path string, info os.FileInfo, err error) error {
+		if err := filepath.Walk(libPath, func(path string, _ os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
+
 			return checkFileAgainstRootModule(path, rootModuleName)
-		})
-		if err != nil {
-			return err
+		}); err != nil {
+			return fmt.Errorf("walk lib %q: %w", libPath, err)
 		}
 	}
+
 	return nil
 }
 
-func checkLibImports(libPath string, libModules, forbiddenModules map[string]bool) error {
-	return filepath.Walk(libPath, func(path string, info os.FileInfo, err error) error {
+func checkLibImports(libPath string, _, forbiddenModules map[string]bool) error {
+	if err := filepath.Walk(libPath, func(path string, _ os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -167,7 +189,7 @@ func checkLibImports(libPath string, libModules, forbiddenModules map[string]boo
 		fset := token.NewFileSet()
 		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
 		if err != nil {
-			return err
+			return fmt.Errorf("parse %q: %w", path, err)
 		}
 
 		for _, imp := range f.Imports {
@@ -188,32 +210,37 @@ func checkLibImports(libPath string, libModules, forbiddenModules map[string]boo
 		}
 
 		return nil
-	})
+	}); err != nil {
+		return fmt.Errorf("walk lib %q: %w", libPath, err)
+	}
+
+	return nil
 }
 
 func checkFileAgainstRootModule(path, rootModuleName string) error {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse %q: %w", path, err)
 	}
 
 	for _, imp := range f.Imports {
 		importPath := strings.Trim(imp.Path.Value, `"`)
-		if strings.HasPrefix(importPath, rootModuleName+"/") {
-			relPath := strings.TrimPrefix(importPath, rootModuleName+"/")
-			firstPart := strings.Split(relPath, "/")[0]
-			if firstPart != "libs" {
-				return fmt.Errorf(
-					"%s: lib imports forbidden package: %s\n\n"+
-						"libs/ packages can only import:\n"+
-						"  - Standard library\n"+
-						"  - External dependencies\n"+
-						"  - Other libs/ packages\n\n"+
-						"Forbidden: services/, contracts/, tools/, or root packages",
-					path, importPath,
-				)
-			}
+		if !strings.HasPrefix(importPath, rootModuleName+"/") {
+			continue
+		}
+		relPath := strings.TrimPrefix(importPath, rootModuleName+"/")
+		firstPart := strings.Split(relPath, "/")[0]
+		if firstPart != "libs" {
+			return fmt.Errorf(
+				"%s: lib imports forbidden package: %s\n\n"+
+					"libs/ packages can only import:\n"+
+					"  - Standard library\n"+
+					"  - External dependencies\n"+
+					"  - Other libs/ packages\n\n"+
+					"Forbidden: services/, contracts/, tools/, or root packages",
+				path, importPath,
+			)
 		}
 	}
 
@@ -221,9 +248,9 @@ func checkFileAgainstRootModule(path, rootModuleName string) error {
 }
 
 func readModuleName(goModPath string) (string, error) {
-	content, err := os.ReadFile(goModPath)
+	content, err := os.ReadFile(goModPath) //nolint:gosec // path is constructed from trusted workspace internals
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read go.mod %q: %w", goModPath, err)
 	}
 
 	for _, line := range strings.Split(string(content), "\n") {

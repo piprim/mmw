@@ -1,7 +1,7 @@
 package scaffold
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -18,8 +18,8 @@ const (
 
 // Variable describes a single template variable loaded from template.toml.
 type Variable struct {
-	Name    string       // PascalCase (e.g. "WithConnect")
-	Default any          // string | bool | []string
+	Name    string // PascalCase (e.g. "WithConnect")
+	Default any    // string | bool | []string
 	Kind    VariableKind
 }
 
@@ -36,16 +36,19 @@ func NormalizeKey(s string) string {
 			return s
 		}
 		r, size := utf8.DecodeRuneInString(s)
+
 		return string(unicode.ToUpper(r)) + s[size:]
 	}
 	var b strings.Builder
 	for _, p := range parts {
-		if p != "" {
-			r, size := utf8.DecodeRuneInString(p)
-			b.WriteRune(unicode.ToUpper(r))
-			b.WriteString(p[size:])
+		if p == "" {
+			continue
 		}
+		r, size := utf8.DecodeRuneInString(p)
+		_, _ = b.WriteRune(unicode.ToUpper(r))
+		_, _ = b.WriteString(p[size:])
 	}
+
 	return b.String()
 }
 
@@ -55,7 +58,7 @@ func NormalizeKey(s string) string {
 func EnrichVars(vars map[string]any) error {
 	name, ok := vars["Name"].(string)
 	if !ok || name == "" {
-		return fmt.Errorf("scaffold: Name is required")
+		return errors.New("scaffold: Name is required")
 	}
 	orgPrefix, _ := vars["OrgPrefix"].(string)
 	if orgPrefix == "" {
@@ -69,5 +72,6 @@ func EnrichVars(vars map[string]any) error {
 		vars["PlatformPath"] = "github.com/piprim/mmw"
 	}
 	vars["PkgDef"] = "def" + name
+
 	return nil
 }

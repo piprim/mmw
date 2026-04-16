@@ -14,9 +14,9 @@ type DomainPurityValidator struct {
 	ModulesDir string
 }
 
-func (v *DomainPurityValidator) Name() string { return "domain-purity" }
+func (*DomainPurityValidator) Name() string { return "domain-purity" }
 
-func (v *DomainPurityValidator) Description() string {
+func (*DomainPurityValidator) Description() string {
 	return "internal/domain/ must not import contracts/ (transport concerns belong in adapters)"
 }
 
@@ -26,6 +26,7 @@ func (v *DomainPurityValidator) Check() error {
 		if os.IsNotExist(err) {
 			return nil
 		}
+
 		return fmt.Errorf("read modules dir: %w", err)
 	}
 
@@ -41,13 +42,14 @@ func (v *DomainPurityValidator) Check() error {
 			return err
 		}
 	}
+
 	return nil
 }
 
 // walkForForbiddenImport walks a directory and returns an error if any .go file
 // imports a path containing the forbidden substring.
 func walkForForbiddenImport(dir, forbidden, moduleName, layer string) error {
-	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(dir, func(path string, _ os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -57,7 +59,7 @@ func walkForForbiddenImport(dir, forbidden, moduleName, layer string) error {
 		fset := token.NewFileSet()
 		f, parseErr := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
 		if parseErr != nil {
-			return parseErr
+			return fmt.Errorf("parse %q: %w", path, parseErr)
 		}
 		for _, imp := range f.Imports {
 			importPath := strings.Trim(imp.Path.Value, `"`)
@@ -75,6 +77,11 @@ func walkForForbiddenImport(dir, forbidden, moduleName, layer string) error {
 				)
 			}
 		}
+
 		return nil
-	})
+	}); err != nil {
+		return fmt.Errorf("walk %q: %w", dir, err)
+	}
+
+	return nil
 }

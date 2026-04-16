@@ -28,6 +28,7 @@ func BearerAuthMiddleware(validate TokenValidator, logger *slog.Logger, excluded
 			for _, path := range excludedPaths {
 				if strings.HasPrefix(r.URL.Path, path) || strings.Contains(r.URL.Path, "/debug/") {
 					next.ServeHTTP(w, r)
+
 					return
 				}
 			}
@@ -35,6 +36,7 @@ func BearerAuthMiddleware(validate TokenValidator, logger *slog.Logger, excluded
 			token := extractBearerToken(r)
 			if token == "" {
 				writeUnauthorized(w)
+
 				return
 			}
 
@@ -42,6 +44,7 @@ func BearerAuthMiddleware(validate TokenValidator, logger *slog.Logger, excluded
 			if err != nil {
 				logger.Error("token validation failed", "err", err, "path", r.URL.Path)
 				writeUnauthorized(w)
+
 				return
 			}
 

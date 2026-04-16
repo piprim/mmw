@@ -64,6 +64,5 @@ func (FancyLogger) Println(vs ...any) {
 }
 
 func (FancyLogger) Fatalf(format string, v ...any) {
-	//nolint:revive // FancyLogger implements a logger interface that requires Fatalf
-	log.Fatalf(format, v...)
+	log.Fatalf(format, v...) //nolint:revive // deep-exit: required by goose.Logger interface
 }
