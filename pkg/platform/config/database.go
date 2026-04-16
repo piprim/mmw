@@ -9,7 +9,7 @@ type Database struct {
 	Scheme string `mapstructure:"scheme"`
 	User   string `mapstructure:"user"`
 	// Do not export as json and set fron env vars.
-	Password string `env:"DB_PASSWORD" json:"-"`
+	Password string `env:"DB_PASSWORD" json:"-" mapstructure:"-"`
 	Host     string `mapstructure:"host"`
 	Port     Port   `mapstructure:"port"`
 	Name     string `mapstructure:"name"`
