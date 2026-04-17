@@ -731,10 +731,16 @@ Variable names normalise automatically: `with-connect`, `with_connect`, and `wit
 ## CLI — `mmw-cli`
 
 ```
-mmw new module [--template <path>]   Scaffold a new module interactively
-mmw new contract <name>              Generate a contract definition
-mmw check arch                       Validate architectural boundaries
-mmw test coverage [flags] [packages] Print a test coverage table
+mmw new module [--template <path>]        Scaffold a new module interactively
+mmw new contract <name>                   Generate a contract definition
+mmw check arch                            Validate architectural boundaries
+mmw check files [--fix] [files...]        Check files for whitespace / EOF / size
+mmw check format [--fix] [files...]       Check Go formatting with gofumpt
+mmw check toml [files...]                 Check TOML syntax
+mmw check yaml [files...]                 Check YAML syntax with yamllint
+mmw check lint [packages...]              Run golangci-lint
+mmw check pre-commit [--modified]         Run all checks as a pre-commit gate
+mmw test coverage [flags] [packages]      Print a test coverage table
 ```
 
 ### `mmw new module`
@@ -757,6 +763,77 @@ Generates only the contract definition files for an existing module:
 ### `mmw check arch`
 
 Runs all architectural boundary validators (see `pkg/archtest`) and exits non-zero on failure. Used as a pre-commit hook via `mise run arch:check`.
+
+### `mmw check files [--fix] [files...]`
+
+Validates each file for:
+
+| Check | Auto-fixable |
+|---|---|
+| Trailing whitespace on any line | Yes (`--fix`) |
+| Missing newline at end of file | Yes (`--fix`) |
+| File size > 500 KB | No |
+
+Defaults to all git-tracked files when no arguments are given. `--fix` rewrites files in-place; size violations are never auto-fixed.
+
+### `mmw check format [--fix] [files...]`
+
+Reports any `.go` file whose content differs from what gofumpt would produce. Uses gofumpt as a library — no subprocess. `--fix` rewrites files in-place.
+
+Defaults to all tracked `*.go` files when no arguments are given.
+
+### `mmw check toml [files...]`
+
+Parses each `.toml` file using `go-toml/v2` and reports syntax errors. No subprocess. Defaults to all tracked `*.toml` files.
+
+### `mmw check yaml [files...]`
+
+Runs `yamllint -d relaxed` against each `.yaml`/`.yml` file. Requires `yamllint` on PATH. Defaults to all tracked `*.yaml`/`*.yml` files.
+
+### `mmw check lint [packages...]`
+
+Runs `golangci-lint run` against the specified Go packages. Linting runs at package level (not per-file) so package-scope linters fire correctly. Requires `golangci-lint` on PATH. Defaults to `./...`.
+
+### `mmw check pre-commit [--modified] [--fail-fast]`
+
+Read-only orchestrator that runs all checks in sequence against git-selected files:
+
+```
+1. files  — trailing whitespace, EOF newline, size > 500 KB
+2. yaml   — YAML syntax (yamllint)
+3. toml   — TOML syntax (go-toml/v2)
+4. format — gofumpt formatting
+5. lint   — golangci-lint (package-level, derived from changed .go files)
+```
+
+**File selection:**
+
+| Mode | Files checked |
+|---|---|
+| default | staged files only (`git diff --cached --diff-filter=ACM`) |
+| `--modified` | staged + modified tracked files (for manual runs) |
+
+`--fail-fast` stops after the first checker that reports violations. All other checks still run by default.
+
+This command never modifies files or the git index — use the individual `--fix` commands for that.
+
+**Usage in modules** (via `go tool`):
+
+```toml
+# mise.toml
+[tasks.pre-commit]
+depends = ["arch:check", "buf:lint"]
+description = "Pre-commit checks"
+run = "go tool mmw check pre-commit --modified"
+alias = "pc"
+```
+
+```
+# go.mod
+tool (
+    github.com/piprim/mmw/cmd/mmw-cli
+)
+```
 
 ### `mmw test coverage`
 
