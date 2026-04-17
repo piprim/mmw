@@ -186,7 +186,7 @@ func buildField(v scaffold.Variable, vars map[string]any) (huh.Field, binding) {
 
 		return field, binding{name: name, apply: func() { vars[name] = *ptr }}
 
-	case scaffold.KindChoice:
+	case scaffold.KindChoiceString:
 		choices, _ := v.Default.([]string)
 		opts := make([]huh.Option[string], len(choices))
 		for j, c := range choices {

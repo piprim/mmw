@@ -11,9 +11,9 @@ import (
 type VariableKind int
 
 const (
-	KindText   VariableKind = iota // string input (empty default = required)
-	KindBool                       // confirm (yes/no)
-	KindChoice                     // select from list (first item = default)
+	KindText         VariableKind = iota // string input (empty default = required)
+	KindBool                             // confirm (yes/no)
+	KindChoiceString                     // select from list of string (first item = default)
 )
 
 // Variable describes a single template variable loaded from template.toml.
@@ -39,6 +39,7 @@ func NormalizeKey(s string) string {
 
 		return string(unicode.ToUpper(r)) + s[size:]
 	}
+
 	var b strings.Builder
 	for _, p := range parts {
 		if p == "" {
@@ -60,17 +61,21 @@ func EnrichVars(vars map[string]any) error {
 	if !ok || name == "" {
 		return errors.New("scaffold: Name is required")
 	}
+
 	orgPrefix, _ := vars["OrgPrefix"].(string)
 	if orgPrefix == "" {
 		orgPrefix = "github.com/acme"
 	}
+
 	r, size := utf8.DecodeRuneInString(name)
 	vars["NameTitle"] = string(unicode.ToUpper(r)) + name[size:]
 	vars["ModulePath"] = orgPrefix + "/mmw-" + name
 	vars["ContractsPath"] = orgPrefix + "/mmw-contracts"
+
 	if _, ok := vars["PlatformPath"]; !ok {
 		vars["PlatformPath"] = "github.com/piprim/mmw"
 	}
+
 	vars["PkgDef"] = "def" + name
 
 	return nil

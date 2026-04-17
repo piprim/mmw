@@ -3,6 +3,7 @@ package scaffold
 import (
 	"fmt"
 	"io/fs"
+	"maps"
 	"slices"
 	"strings"
 
@@ -41,15 +42,14 @@ func LoadManifest(fsys fs.FS) (*Manifest, error) {
 		Conditions: make(map[string]string, len(raw.Conditions)),
 	}
 
-	for k, v := range raw.Conditions {
-		m.Conditions[k] = v
-	}
+	maps.Copy(m.Conditions, raw.Conditions)
 
 	for rawName, val := range raw.Variables {
 		v, err := parseVariable(rawName, val)
 		if err != nil {
 			return nil, err
 		}
+
 		m.Variables = append(m.Variables, v)
 	}
 
@@ -78,7 +78,7 @@ func parseVariable(rawName string, val any) (Variable, error) {
 			}
 			choices[i] = s
 		}
-		v.Kind = KindChoice
+		v.Kind = KindChoiceString
 		v.Default = choices
 	default:
 		return Variable{}, fmt.Errorf("variable %q: unsupported type %T (use string, bool, or []string)", rawName, val)

@@ -56,7 +56,7 @@ func TestLoadManifest_ParsesVariables(t *testing.T) {
 
 	// choice
 	require.Contains(t, byName, "License")
-	assert.Equal(t, KindChoice, byName["License"].Kind)
+	assert.Equal(t, KindChoiceString, byName["License"].Kind)
 	assert.Equal(t, []string{"MIT", "BSD-3", "Apache"}, byName["License"].Default)
 }
 
