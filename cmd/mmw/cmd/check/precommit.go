@@ -80,23 +80,15 @@ This command is read-only: it never modifies files or alters the git index.`,
 			}
 
 			// Run lint separately if we have Go files and haven't fail-fasted.
+			// golangci-lint output is streamed directly to stdout — no buffering or parsing.
 			if len(goPackages) > 0 && !(failFast && hasViolations) {
-				lintResult, err := checks.NewLintChecker().Check(ctx, goPackages)
+				lintResult, err := checks.NewLintChecker(cmd.OutOrStdout(), cmd.ErrOrStderr()).Check(ctx, goPackages)
 				if err != nil {
 					return err
 				}
 
 				if lintResult.HasViolations() {
 					hasViolations = true
-				}
-
-				for _, v := range lintResult.Violations {
-					loc := v.File
-					if v.Line > 0 {
-						loc = fmt.Sprintf("%s:%d", v.File, v.Line)
-					}
-
-					fmt.Fprintf(cmd.OutOrStdout(), "[%s] %s: %s\n", lintResult.CheckerName, loc, v.Message)
 				}
 			}
 

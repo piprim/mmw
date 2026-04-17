@@ -1,6 +1,8 @@
 package check
 
 import (
+	"errors"
+
 	"github.com/piprim/mmw/internal/pkg/checks"
 	"github.com/spf13/cobra"
 )
@@ -18,14 +20,18 @@ Defaults to ./... when no package arguments are given.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			checker := checks.NewLintChecker()
+			checker := checks.NewLintChecker(cmd.OutOrStdout(), cmd.ErrOrStderr())
 
 			result, err := checker.Check(cmd.Context(), args)
 			if err != nil {
 				return err
 			}
 
-			return printResult(cmd, result)
+			if result.HasViolations() {
+				return errors.New("lint: violations found")
+			}
+
+			return nil
 		},
 	}
 }

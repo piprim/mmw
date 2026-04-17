@@ -31,7 +31,7 @@ run = "gotestsum {{vars.GOTESTSUM_OPTIONS}} --watch -- -v ./..."
 
 [tasks."test:coverage"]
 description = "Run tests with coverage report"
-run = "go run ./cmd/mmw-cli/main.go test coverage"
+run = "go run ./cmd/mmw/main.go test coverage"
 
 [tasks."test:short"]
 description = "Run only short tests"
