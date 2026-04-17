@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/piprim/mmw/cmd/mmw-cli/cmd"
+	"github.com/piprim/mmw/cmd/mmw/cmd"
 )
 
 func main() {

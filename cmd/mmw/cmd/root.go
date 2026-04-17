@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"github.com/piprim/mmw/cmd/mmw-cli/cmd/check"
-	"github.com/piprim/mmw/cmd/mmw-cli/cmd/new"
-	"github.com/piprim/mmw/cmd/mmw-cli/cmd/test"
+	"github.com/piprim/mmw/cmd/mmw/cmd/check"
+	"github.com/piprim/mmw/cmd/mmw/cmd/new"
+	"github.com/piprim/mmw/cmd/mmw/cmd/test"
 	"github.com/spf13/cobra"
 )
 
