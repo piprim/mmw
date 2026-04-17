@@ -2,7 +2,7 @@
 
 Platform library and developer tooling for the MMW modular monolith.
 
-The `mmw` module provides two things: a **runtime platform** (`pkg/platform`) that modules depend on at runtime, and a **CLI** (`cmd/mmw-cli`) used during development.
+The `mmw` module provides two things: a **runtime platform** (`pkg/platform`) that modules depend on at runtime, and a **CLI** (`cmd/mmw`) used during development.
 
 ---
 
@@ -728,7 +728,7 @@ Variable names normalise automatically: `with-connect`, `with_connect`, and `wit
 
 ---
 
-## CLI — `mmw-cli`
+## CLI — `mmw`
 
 ```
 mmw new module [--template <path>]        Scaffold a new module interactively
@@ -831,7 +831,7 @@ alias = "pc"
 ```
 # go.mod
 tool (
-    github.com/piprim/mmw/cmd/mmw-cli
+    github.com/piprim/mmw/cmd/mmw
 )
 ```
 
