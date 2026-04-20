@@ -2,15 +2,37 @@
 # Variable names support: hyphen-case, snake_case, camelCase
 # All normalize to PascalCase in templates (e.g. with-connect → .WithConnect)
 
-[variables]
-name              = ""
-org-prefix        = "github.com/acme"
-contracts-path    = ""
-platform-path     = "github.com/piprim/mmw"
-with-connect      = true
-with-contract     = true
-with-database     = true
-license           = ["MIT", "BSD-3", "GNU GPL v3.0", "Apache Software License 2.0"]
+[variables.name]
+default     = ""
+description = "Module name in kebab-case (e.g. payment, order-management)"
+
+[variables.org-prefix]
+default     = "github.com/acme"
+description = "Go module path prefix for your organisation (e.g. github.com/acme)"
+
+[variables.contracts-path]
+default     = ""
+description = "Go module path of the shared contracts module (e.g. github.com/acme/my-contracts)"
+
+[variables.platform-path]
+default     = "github.com/piprim/mmw"
+description = "Go module path of the MMW platform (rarely changed)"
+
+[variables.with-connect]
+default     = true
+description = "Generate a Connect/gRPC inbound adapter and proto definition"
+
+[variables.with-contract]
+default     = true
+description = "Generate the Go contract package (service interface, DTOs, errors)"
+
+[variables.with-database]
+default     = true
+description = "Generate the PostgreSQL persistence adapter and migration scaffolding"
+
+[variables.license]
+default     = ["MIT", "BSD-3", "GNU GPL v3.0", "Apache Software License 2.0"]
+description = "License to include in the module"
 
 [conditions]
 "modules"                                                                          = "{{if .WithModule}}true{{end}}"
