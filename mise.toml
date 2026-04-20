@@ -73,3 +73,19 @@ godoc -http=:6060
 description = "Show tool versions and key environment info"
 run = "./scripts/doctor.sh"
 alias = "dr"
+
+[tasks.build]
+description = "Build the mmw binary (commit/time from VCS info, version from tag)"
+run = """
+VERSION=$(git describe --tags --exact-match 2>/dev/null || echo "dev")
+go build -ldflags "-X github.com/piprim/mmw/cmd/mmw/cmd/version.Version=${VERSION}" -o ./bin/mmw ./cmd/mmw/
+echo "Built ./bin/mmw (${VERSION})"
+"""
+
+[tasks.install]
+description = "Build and install mmw to $GOBIN (commit/time from VCS info, version from tag)"
+run = """
+VERSION=$(git describe --tags --exact-match 2>/dev/null || echo "dev")
+go install -ldflags "-X github.com/piprim/mmw/cmd/mmw/cmd/version.Version=${VERSION}" ./cmd/mmw/
+echo "Installed mmw (${VERSION}) → ${GOBIN}/mmw"
+"""

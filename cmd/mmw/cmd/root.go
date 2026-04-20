@@ -4,6 +4,7 @@ import (
 	"github.com/piprim/mmw/cmd/mmw/cmd/check"
 	"github.com/piprim/mmw/cmd/mmw/cmd/new"
 	"github.com/piprim/mmw/cmd/mmw/cmd/test"
+	"github.com/piprim/mmw/cmd/mmw/cmd/version"
 	"github.com/spf13/cobra"
 )
 
@@ -20,6 +21,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(new.NewCmd())
 	root.AddCommand(check.NewCmd())
 	root.AddCommand(test.NewCmd())
+	root.AddCommand(version.NewCmd())
 
 	return root
 }
