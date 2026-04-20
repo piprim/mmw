@@ -1,4 +1,4 @@
-// Package {{.Name}} is the {{.NameTitle}} module.
+// Package {{.Name}} is the {{.Name | pascal}} module.
 package {{.Name}}
 
 import (
@@ -11,17 +11,17 @@ import (
 	pfevents "{{.PlatformPath}}/pkg/platform/events"
 	pfuow "{{.PlatformPath}}/pkg/platform/pg/uow"
 	pfserver "{{.PlatformPath}}/pkg/platform/server"
-	"{{.ModulePath}}/internal/adapters/outbound/events"
-	"{{.ModulePath}}/internal/adapters/outbound/persistence/postgres"
-	"{{.ModulePath}}/internal/application"
-	"{{.ModulePath}}/internal/infra/config"
+	"{{.OrgPrefix}}/{{.Name}}/internal/adapters/outbound/events"
+	"{{.OrgPrefix}}/{{.Name}}/internal/adapters/outbound/persistence/postgres"
+	"{{.OrgPrefix}}/{{.Name}}/internal/application"
+	"{{.OrgPrefix}}/{{.Name}}/internal/infra/config"
 	"golang.org/x/sync/errgroup"
 	"github.com/rotisserie/eris"
 )
 
 const (
 	relayTableName = "{{.Name}}.event"
-	ModuleName     = "{{.NameTitle}}"
+	ModuleName     = "{{.Name | pascal}}"
 	PGSchema       = "{{.Name}}"
 )
 
@@ -31,7 +31,7 @@ type Module struct {
 	relay   *pfoutbox.EventsRelay
 	server  *pfserver.HTTPServer
 	logger  *slog.Logger
-	service application.{{.NameTitle}}Service
+	service application.{{.Name | pascal}}Service
 }
 
 type Infrastructure struct {
@@ -40,7 +40,7 @@ type Infrastructure struct {
 	Logger   *slog.Logger
 }
 
-func (m *Module) Service() application.{{.NameTitle}}Service { return m.service }
+func (m *Module) Service() application.{{.Name | pascal}}Service { return m.service }
 
 func New(infra Infrastructure) (*Module, error) {
 	cfg, err := config.Load(context.Background(), "")
@@ -49,9 +49,9 @@ func New(infra Infrastructure) (*Module, error) {
 	}
 
 	uow := pfuow.New(infra.DBPool)
-	repo := postgres.New{{.NameTitle}}Repository(uow)
+	repo := postgres.New{{.Name | pascal}}Repository(uow)
 	dispatcher := events.NewPostgresOutboxDispatcher(uow)
-	svc := application.New{{.NameTitle}}ApplicationService(repo, uow, dispatcher)
+	svc := application.New{{.Name | pascal}}ApplicationService(repo, uow, dispatcher)
 
 	relay := pfoutbox.NewEnventsRelay(infra.DBPool, infra.EventBus, infra.Logger, relayTableName)
 	server := pfserver.NewHTTPServer(pfserver.HTTPServerInfra{

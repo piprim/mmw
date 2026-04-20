@@ -7,14 +7,15 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/piprim/goplt"
 	"github.com/piprim/mmw/pkg/scaffold"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestGenerateModule_CompilableOutput generates a module into a temp directory
+// TestGenerate_FullOptionOutput generates a module into a temp directory
 // that mirrors the real repo structure and verifies the files are generated correctly.
-func TestGenerateModule_CompilableOutput(t *testing.T) {
+func TestGenerate_FullOptionOutput(t *testing.T) {
 	repoRoot := findRepoRoot(t)
 
 	dir := t.TempDir()
@@ -26,23 +27,33 @@ func TestGenerateModule_CompilableOutput(t *testing.T) {
 	))
 
 	fsys := scaffold.EmbeddedFS()
+
+	m, err := goplt.LoadManifest(fsys)
+	require.NoError(t, err)
+
 	vars := map[string]any{
-		"Name":         "demomod",
-		"OrgPrefix":    "github.com/pivaldi",
-		"WithConnect":  true,
-		"WithContract": true,
-		"WithDatabase": true,
+		"Name":          "demomod",
+		"OrgPrefix":     "github.com/pivaldi",
+		"ContractsPath": "github.com/pivaldi/mmw-contracts",
+		"PlatformPath":  "github.com/piprim/mmw",
+		"WithModule":    true,
+		"WithConnect":   true,
+		"WithContract":  true,
+		"WithDatabase":  true,
+		"License":       "MIT",
 	}
-	require.NoError(t, scaffold.EnrichVars(vars))
-	require.NoError(t, scaffold.GenerateModule(fsys, dir, vars))
+
+	require.NoError(t, goplt.NewGenerator().Generate(fsys, m, dir, vars))
 	require.NoError(t, scaffold.UpdateGoWork(dir, "demomod"))
 
 	// Verify go.work now contains demomod
-	goWorkContent, _ := os.ReadFile(filepath.Join(dir, "go.work"))
+	goWorkContent, err := os.ReadFile(filepath.Join(dir, "go.work"))
+	require.NoError(t, err)
 	assert.Contains(t, string(goWorkContent), "./modules/demomod")
 
 	// Verify key files generated
 	assertFileExists(t, dir, "modules/demomod/go.mod")
+	assertFileContains(t, dir, "modules/demomod/go.mod", "module github.com/pivaldi/demomod")
 	assertFileExists(t, dir, "modules/demomod/demomodmod.go")
 	assertFileExists(t, dir, "contracts/go/application/demomod/api.go")
 	assertFileExists(t, dir, "contracts/proto/demomod/v1/demomod.proto")

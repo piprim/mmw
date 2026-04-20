@@ -1,14 +1,14 @@
 package events
 
 import (
-	{{.PkgDef}} "{{.ContractsPath}}/definitions/{{.Name}}"
-	"{{.ModulePath}}/internal/domain"
+	def{{.Name | lower}} "{{.ContractsPath}}/definitions/{{.Name}}"
+	"{{.OrgPrefix}}/{{.Name}}/internal/domain"
 )
 
 //nolint:gochecknoglobals
 var domainTopics = map[string]string{
-	domain.EventTypeCreated:   {{.PkgDef}}.TopicCreated,
-	domain.EventTypeUpdated:   {{.PkgDef}}.TopicUpdated,
-	domain.EventTypeCompleted: {{.PkgDef}}.TopicCompleted,
-	domain.EventTypeDeleted:   {{.PkgDef}}.TopicDeleted,
+	domain.EventTypeCreated:   def{{.Name | lower}}.TopicCreated,
+	domain.EventTypeUpdated:   def{{.Name | lower}}.TopicUpdated,
+	domain.EventTypeCompleted: def{{.Name | lower}}.TopicCompleted,
+	domain.EventTypeDeleted:   def{{.Name | lower}}.TopicDeleted,
 }

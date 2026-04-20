@@ -14,7 +14,7 @@ var embeddedFS embed.FS
 
 var getConfigFS = func() fs.FS { return embeddedFS }
 
-// Config holds {{.NameTitle}} module configuration.
+// Config holds {{.Name | pascal}} module configuration.
 type Config struct {
 	pfconfig.Base
 	Database *pfconfig.Database `mapstructure:"database"`

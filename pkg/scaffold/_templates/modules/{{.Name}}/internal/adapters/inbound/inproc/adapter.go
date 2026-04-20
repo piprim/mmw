@@ -1,19 +1,19 @@
 package inproc
 
 import (
-	{{.PkgDef}} "{{.ContractsPath}}/definitions/{{.Name}}"
-	"{{.ModulePath}}/internal/application"
+	def{{.Name | lower}} "{{.ContractsPath}}/definitions/{{.Name}}"
+	"{{.OrgPrefix}}/{{.Name}}/internal/application"
 )
 
-// Adapter wraps application.{{.NameTitle}}Service and implements {{.PkgDef}}.{{.NameTitle}}Service.
+// Adapter wraps application.{{.Name | pascal}}Service and implements def{{.Name | lower}}.{{.Name | pascal}}Service.
 type Adapter struct {
-	svc application.{{.NameTitle}}Service
+	svc application.{{.Name | pascal}}Service
 }
 
 // compile-time assertion
-var _ {{.PkgDef}}.{{.NameTitle}}Service = (*Adapter)(nil)
+var _ def{{.Name | lower}}.{{.Name | pascal}}Service = (*Adapter)(nil)
 
 // NewAdapter creates a new Adapter.
-func NewAdapter(svc application.{{.NameTitle}}Service) *Adapter {
+func NewAdapter(svc application.{{.Name | pascal}}Service) *Adapter {
 	return &Adapter{svc: svc}
 }

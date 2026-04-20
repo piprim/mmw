@@ -3,14 +3,14 @@ package ports
 import (
 	"context"
 
-	"{{.ModulePath}}/internal/domain"
+	"{{.OrgPrefix}}/{{.Name}}/internal/domain"
 )
 
-// {{.NameTitle}}Repository defines the persistence port.
-type {{.NameTitle}}Repository interface {
-	Save(ctx context.Context, e *domain.{{.NameTitle}}) error
-	FindByID(ctx context.Context, id domain.{{.NameTitle}}ID) (*domain.{{.NameTitle}}, error)
-	Delete(ctx context.Context, id domain.{{.NameTitle}}ID) error
+// {{.Name | pascal}}Repository defines the persistence port.
+type {{.Name | pascal}}Repository interface {
+	Save(ctx context.Context, e *domain.{{.Name | pascal}}) error
+	FindByID(ctx context.Context, id domain.{{.Name | pascal}}ID) (*domain.{{.Name | pascal}}, error)
+	Delete(ctx context.Context, id domain.{{.Name | pascal}}ID) error
 	Health(ctx context.Context) error
 }
 

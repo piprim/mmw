@@ -7,7 +7,7 @@ import (
 
 	dbpgcli "{{.PlatformPath}}/pkg/platform/db/cli"
 	pfslog "{{.PlatformPath}}/pkg/platform/slog"
-	{{.Name}} "{{.ModulePath}}"
+	{{.Name}} "{{.OrgPrefix}}/{{.Name}}"
 
 	"github.com/rotisserie/eris"
 )

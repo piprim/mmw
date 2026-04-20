@@ -2,11 +2,11 @@ package new
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 
-	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
+	"github.com/piprim/goplt"
+	gopltui "github.com/piprim/goplt/tui"
 	"github.com/piprim/mmw/pkg/platform"
 	"github.com/piprim/mmw/pkg/scaffold"
 	"github.com/spf13/cobra"
@@ -45,37 +45,38 @@ func runNewModule(templatePath string) error {
 		return err
 	}
 
-	m, err := scaffold.LoadManifest(fsys)
+	m, err := goplt.LoadManifest(fsys)
 	if err != nil {
 		return fmt.Errorf("load manifest: %w", err)
 	}
 
-	// Seed OrgPrefix default from contracts/go.mod detection.
+	// Seed OrgPrefix default from workspace detection before the TUI runs.
 	for i, v := range m.Variables {
-		if v.Name != "OrgPrefix" {
-			continue
-		}
-
-		detected := detectOrgPrefix(root)
-		if detected != "" {
-			m.Variables[i].Default = detected
+		if v.Name == "OrgPrefix" {
+			if d := detectOrgPrefix(root); d != "" {
+				m.Variables[i].Default = d
+			}
 		}
 	}
 
-	vars, err := collectVars(m)
+	vars, err := gopltui.CollectVars(m)
 	if err != nil {
 		return fmt.Errorf("prompt cancelled: %w", err)
 	}
 
-	if err := scaffold.EnrichVars(vars); err != nil {
-		return fmt.Errorf("enrich vars: %w", err)
+	// WithModule is a routing flag — not user-facing, drives the modules/ condition.
+	vars["WithModule"] = true
+
+	gen := goplt.NewGenerator()
+	if err := gen.Generate(fsys, m, root, vars); err != nil {
+		return fmt.Errorf("generate module: %w", err)
+	}
+
+	if err := goplt.RunHooks(m, root); err != nil {
+		return fmt.Errorf("post-generate hooks: %w", err)
 	}
 
 	name, _ := vars["Name"].(string)
-
-	if err := scaffold.GenerateModule(fsys, root, vars); err != nil {
-		return fmt.Errorf("generate module: %w", err)
-	}
 
 	if err := scaffold.UpdateGoWork(root, name); err != nil {
 		_, _ = errorC.Fprintf(os.Stderr, "warning: could not update go.work: %v\n", err)
@@ -96,112 +97,4 @@ func runNewModule(templatePath string) error {
 	infoC.Println("  - Wire the module in cmd/mmw/main.go")
 
 	return nil
-}
-
-// selectTemplateFS returns the embedded FS (default) or an OS directory FS.
-func selectTemplateFS(templatePath string) (fs.FS, error) {
-	if templatePath == "" {
-		return scaffold.EmbeddedFS(), nil
-	}
-	info, err := os.Stat(templatePath)
-	if err != nil {
-		return nil, fmt.Errorf("template path %q: %w", templatePath, err)
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("template path %q is not a directory", templatePath)
-	}
-
-	return os.DirFS(templatePath), nil
-}
-
-// binding pairs a variable name with a function that copies its pointer value into vars.
-type binding struct {
-	name  string
-	apply func()
-}
-
-// collectVars builds and runs a huh form from the manifest variables,
-// returning a PascalCase-keyed map of collected values.
-func collectVars(m *scaffold.Manifest) (map[string]any, error) {
-	vars := make(map[string]any, len(m.Variables))
-
-	// Pre-populate with defaults so all keys exist before the form runs.
-	for _, v := range m.Variables {
-		vars[v.Name] = v.Default
-	}
-
-	var bindings []binding
-	var fields []huh.Field
-
-	for i := range m.Variables {
-		f, b := buildField(m.Variables[i], vars)
-		if f != nil {
-			fields = append(fields, f)
-			bindings = append(bindings, b)
-		}
-	}
-
-	if err := huh.NewForm(huh.NewGroup(fields...)).Run(); err != nil {
-		return nil, fmt.Errorf("form cancelled: %w", err)
-	}
-
-	for _, b := range bindings {
-		b.apply()
-	}
-
-	return vars, nil
-}
-
-// buildField constructs a huh.Field and its binding for a single manifest variable.
-func buildField(v scaffold.Variable, vars map[string]any) (huh.Field, binding) {
-	name := v.Name
-
-	switch v.Kind {
-	case scaffold.KindText:
-		val := ""
-		if s, ok := v.Default.(string); ok {
-			val = s
-		}
-		ptr := &val
-		field := huh.NewInput().
-			Title(name).
-			Value(ptr).
-			Validate(func(s string) error {
-				if def, _ := v.Default.(string); def == "" && s == "" {
-					return fmt.Errorf("%s is required", name)
-				}
-
-				return nil
-			})
-
-		return field, binding{name: name, apply: func() { vars[name] = *ptr }}
-
-	case scaffold.KindBool:
-		val := false
-		if b, ok := v.Default.(bool); ok {
-			val = b
-		}
-		ptr := &val
-		field := huh.NewConfirm().Title(name).Value(ptr)
-
-		return field, binding{name: name, apply: func() { vars[name] = *ptr }}
-
-	case scaffold.KindChoiceString:
-		choices, _ := v.Default.([]string)
-		opts := make([]huh.Option[string], len(choices))
-		for j, c := range choices {
-			opts[j] = huh.NewOption(c, c)
-		}
-		val := ""
-		if len(choices) > 0 {
-			val = choices[0]
-		}
-		ptr := &val
-		field := huh.NewSelect[string]().Title(name).Options(opts...).Value(ptr)
-
-		return field, binding{name: name, apply: func() { vars[name] = *ptr }}
-
-	default:
-		return nil, binding{}
-	}
 }

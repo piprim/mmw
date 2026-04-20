@@ -13,9 +13,9 @@ type DomainEvent interface {
 	GetOccurredAt() interface{}
 }
 
-type {{.NameTitle}}CreatedEvent struct {
+type {{.Name | pascal}}CreatedEvent struct {
 	ID string `json:"id"`
 }
 
-func (e {{.NameTitle}}CreatedEvent) EventType() string         { return EventTypeCreated }
-func (e {{.NameTitle}}CreatedEvent) GetOccurredAt() interface{} { return nil }
+func (e {{.Name | pascal}}CreatedEvent) EventType() string         { return EventTypeCreated }
+func (e {{.Name | pascal}}CreatedEvent) GetOccurredAt() interface{} { return nil }

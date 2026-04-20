@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	pfuow "{{.PlatformPath}}/pkg/platform/pg/uow"
-	"{{.ModulePath}}/internal/domain"
+	"{{.OrgPrefix}}/{{.Name}}/internal/domain"
 	"github.com/rotisserie/eris"
 )
 

@@ -2,23 +2,23 @@ package application
 
 import "context"
 
-// {{.NameTitle}}Service defines the application service interface.
-type {{.NameTitle}}Service interface {
+// {{.Name | pascal}}Service defines the application service interface.
+type {{.Name | pascal}}Service interface {
 	Health(ctx context.Context) (any, error)
 }
 
-// {{.NameTitle}}ApplicationService implements {{.NameTitle}}Service.
-type {{.NameTitle}}ApplicationService struct{}
+// {{.Name | pascal}}ApplicationService implements {{.Name | pascal}}Service.
+type {{.Name | pascal}}ApplicationService struct{}
 
-// New{{.NameTitle}}ApplicationService creates a new application service.
-func New{{.NameTitle}}ApplicationService(
+// New{{.Name | pascal}}ApplicationService creates a new application service.
+func New{{.Name | pascal}}ApplicationService(
 	repo interface{},
 	uow interface{},
 	dispatcher interface{},
-) {{.NameTitle}}Service {
-	return &{{.NameTitle}}ApplicationService{}
+) {{.Name | pascal}}Service {
+	return &{{.Name | pascal}}ApplicationService{}
 }
 
-func (s *{{.NameTitle}}ApplicationService) Health(ctx context.Context) (any, error) {
+func (s *{{.Name | pascal}}ApplicationService) Health(ctx context.Context) (any, error) {
 	return nil, nil
 }

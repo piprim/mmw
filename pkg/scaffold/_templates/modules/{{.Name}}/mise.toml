@@ -1,4 +1,4 @@
-# Mise configuration for {{.NameTitle}} module
+# Mise configuration for {{.Name | pascal}} module
 [settings]
 experimental = true
 quiet = true
@@ -124,7 +124,7 @@ run = """
 # Database tasks
 [tasks."db:migrate:build"]
 description = "Build the database migrations (needed to embed go migrations)"
-# sources = ["cmd/migration/*.go", "{{config_root}}/internal/infra/persistence/migrations/scripts/*.go"]
+# sources = ["cmd/migration/*.go", "{{`{{config_root}}`}}/internal/infra/persistence/migrations/scripts/*.go"]
 run = """
   go build {{`{{vars.COMPILE_OPTIONS}}`}} -o {{`{{vars.BUILD_DIR}}`}}/ cmd/migration/migrate.go &&
   ls -l {{`{{vars.BUILD_DIR}}`}}/migrate
