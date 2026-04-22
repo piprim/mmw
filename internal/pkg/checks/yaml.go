@@ -16,7 +16,7 @@ func NewYAMLChecker() Checker {
 	return &yamlChecker{}
 }
 
-func (c *yamlChecker) Name() string {
+func (*yamlChecker) Name() string {
 	return "yaml"
 }
 
@@ -54,7 +54,7 @@ func (c *yamlChecker) Check(ctx context.Context, targets []string) (Result, erro
 	// Propagate context cancellation as a real error.
 	runErr := cmd.Run()
 	if runErr != nil && ctx.Err() != nil {
-		return Result{}, ctx.Err()
+		return Result{}, fmt.Errorf("yaml: %w", ctx.Err())
 	}
 
 	for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
@@ -72,7 +72,7 @@ func (c *yamlChecker) Check(ctx context.Context, targets []string) (Result, erro
 	return result, nil
 }
 
-func (c *yamlChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
+func (*yamlChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
 	if len(targets) > 0 {
 		return targets, nil
 	}

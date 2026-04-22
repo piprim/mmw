@@ -37,7 +37,7 @@ Use --workspace to lint all modules declared in go.work.`,
 
 			result, err := checker.Check(cmd.Context(), args)
 			if err != nil {
-				return err
+				return fmt.Errorf("golangci-lint failed: %w", err)
 			}
 
 			if result.HasViolations() {
@@ -73,7 +73,7 @@ func lintWorkspace(cmd *cobra.Command) error {
 
 		result, err := checker.Check(cmd.Context(), nil)
 		if err != nil {
-			return err
+			return fmt.Errorf("golangci-lint failed: %w", err)
 		}
 
 		if result.HasViolations() {

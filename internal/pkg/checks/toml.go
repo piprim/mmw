@@ -17,7 +17,7 @@ func NewTOMLChecker() Checker {
 	return &tomlChecker{}
 }
 
-func (c *tomlChecker) Name() string {
+func (*tomlChecker) Name() string {
 	return "toml"
 }
 
@@ -56,7 +56,7 @@ func (c *tomlChecker) Check(ctx context.Context, targets []string) (Result, erro
 	return result, nil
 }
 
-func (c *tomlChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
+func (*tomlChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
 	if len(targets) > 0 {
 		return targets, nil
 	}

@@ -52,10 +52,12 @@ func runNewModule(templatePath string) error {
 
 	// Seed OrgPrefix default from workspace detection before the TUI runs.
 	for i, v := range m.Variables {
-		if v.Name == "OrgPrefix" {
-			if d := detectOrgPrefix(root); d != "" {
-				m.Variables[i].Default = d
-			}
+		if v.Name != "OrgPrefix" {
+			continue
+		}
+
+		if d := detectOrgPrefix(root); d != "" {
+			m.Variables[i].Default = d
 		}
 	}
 

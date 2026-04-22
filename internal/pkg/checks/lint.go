@@ -30,7 +30,7 @@ func NewLintCheckerAt(dir string, out, errOut io.Writer) Checker {
 	return &lintChecker{dir: dir, out: out, errOut: errOut}
 }
 
-func (c *lintChecker) Name() string {
+func (*lintChecker) Name() string {
 	return "lint"
 }
 
@@ -42,8 +42,9 @@ func (c *lintChecker) Check(ctx context.Context, targets []string) (Result, erro
 		return Result{}, fmt.Errorf("checks: golangci-lint not found on PATH: %w", err)
 	}
 
-	if len(targets) == 0 {
-		targets = []string{"./..."}
+	runTargets := targets
+	if len(runTargets) == 0 {
+		runTargets = []string{"./..."}
 	}
 
 	result := Result{
@@ -51,7 +52,7 @@ func (c *lintChecker) Check(ctx context.Context, targets []string) (Result, erro
 		Violations:  []Violation{},
 	}
 
-	args := append([]string{"run"}, targets...)
+	args := append([]string{"run"}, runTargets...)
 	golangciCmd := exec.CommandContext(ctx, "golangci-lint", args...)
 	golangciCmd.Dir = c.dir
 	golangciCmd.Stdout = c.out
@@ -60,7 +61,7 @@ func (c *lintChecker) Check(ctx context.Context, targets []string) (Result, erro
 	runErr := golangciCmd.Run()
 
 	if runErr != nil && ctx.Err() != nil {
-		return Result{}, ctx.Err()
+		return Result{}, fmt.Errorf("lint: %w", ctx.Err())
 	}
 
 	if runErr != nil {

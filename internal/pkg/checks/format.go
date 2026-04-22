@@ -19,7 +19,7 @@ func NewFormatChecker() Checker {
 	return &formatChecker{}
 }
 
-func (c *formatChecker) Name() string {
+func (*formatChecker) Name() string {
 	return "format"
 }
 
@@ -38,7 +38,7 @@ func (c *formatChecker) Check(ctx context.Context, targets []string) (Result, er
 	}
 
 	for _, path := range files {
-		if filepath.Ext(path) != ".go" {
+		if filepath.Ext(path) != goExt {
 			continue
 		}
 
@@ -66,7 +66,7 @@ func (c *formatChecker) Fix(ctx context.Context, targets []string) error {
 	}
 
 	for _, path := range files {
-		if filepath.Ext(path) != ".go" {
+		if filepath.Ext(path) != goExt {
 			continue
 		}
 
@@ -78,7 +78,7 @@ func (c *formatChecker) Fix(ctx context.Context, targets []string) error {
 	return nil
 }
 
-func (c *formatChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
+func (*formatChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
 	if len(targets) > 0 {
 		return targets, nil
 	}
@@ -88,7 +88,7 @@ func (c *formatChecker) resolveTargets(ctx context.Context, targets []string) ([
 		return nil, err
 	}
 
-	return FilterByExt(all, ".go"), nil
+	return FilterByExt(all, goExt), nil
 }
 
 func isFormatted(path string) (bool, error) {
@@ -121,5 +121,10 @@ func formatFile(path string) error {
 		return fmt.Errorf("gofumpt: %w", err)
 	}
 
-	return os.WriteFile(path, out, info.Mode().Perm())
+	//nolint:gosec // G703: git path, not user input
+	if err := os.WriteFile(path, out, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+
+	return nil
 }

@@ -42,7 +42,11 @@ func (r Result) withFailed() Result {
 // targets is the list of files or packages to inspect; each checker defines
 // what an empty slice means (typically "all files of the relevant type").
 type Checker interface {
+	// Name returns the identifier used in check output (e.g. "files", "lint").
 	Name() string
+
+	// Check validates targets and returns any violations found.
+	// When targets is empty, implementations fall back to a default set (e.g. all tracked files).
 	Check(ctx context.Context, targets []string) (Result, error)
 }
 
@@ -62,5 +66,8 @@ func extractFileFromLine(line string) string {
 // fails the --fix flag is not registered for that command.
 type Fixer interface {
 	Checker
+
+	// Fix rewrites targets in-place to resolve violations.
+	// When targets is empty, implementations fall back to a default set.
 	Fix(ctx context.Context, targets []string) error
 }

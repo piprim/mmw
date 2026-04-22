@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const goExt = ".go"
+
 // StagedFiles returns files staged for commit (ACM diff filter only).
 // This is the correct set for a real git hook.
 func StagedFiles(ctx context.Context) ([]string, error) {
@@ -63,11 +65,11 @@ func SelectFiles(ctx context.Context, modified bool) ([]string, error) {
 //
 //	→ ["./cmd", "./internal/pkg/checks"]
 func PackageDirsFromFiles(files []string) []string {
-	seen := map[string]struct{}{}
+	seen := make(map[string]struct{})
 	dirs := []string{}
 
 	for _, f := range files {
-		if filepath.Ext(f) != ".go" {
+		if filepath.Ext(f) != goExt {
 			continue
 		}
 

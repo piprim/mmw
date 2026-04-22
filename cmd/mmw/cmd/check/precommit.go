@@ -33,76 +33,7 @@ This command is read-only: it never modifies files or alters the git index.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx := cmd.Context()
-
-			files, err := checks.SelectFiles(ctx, modified)
-			if err != nil {
-				return err
-			}
-
-			if len(files) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "no staged or modified files to check")
-
-				return nil
-			}
-
-			// Build the ordered checker list.  Packages for the lint checker are
-			// derived from the .go files in the selected file set.
-			goPackages := checks.PackageDirsFromFiles(files)
-
-			allCheckers := []checks.Checker{
-				checks.NewFilesChecker(),
-				checks.NewYAMLChecker(),
-				checks.NewTOMLChecker(),
-				checks.NewFormatChecker(),
-			}
-
-			var hasViolations bool
-
-			results, err := checks.RunPreCommit(ctx, allCheckers, files, failFast)
-			if err != nil {
-				return err
-			}
-
-			for _, result := range results {
-				if result.HasViolations() {
-					hasViolations = true
-				}
-
-				for _, v := range result.Violations {
-					loc := v.File
-					if v.Line > 0 {
-						loc = fmt.Sprintf("%s:%d", v.File, v.Line)
-					}
-
-					fmt.Fprintf(cmd.OutOrStdout(), "[%s] %s: %s\n", result.CheckerName, loc, v.Message)
-				}
-			}
-
-			// Run lint separately if we have Go files and haven't fail-fasted.
-			// golangci-lint output is streamed directly to stdout — no buffering or parsing.
-			if len(goPackages) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "[lint] skipped (no Go files in selection)")
-			} else if !(failFast && hasViolations) {
-				lintResult, err := checks.NewLintChecker(cmd.OutOrStdout(), cmd.ErrOrStderr()).Check(ctx, goPackages)
-				if err != nil {
-					return err
-				}
-
-				if lintResult.HasViolations() {
-					hasViolations = true
-				} else {
-					fmt.Fprintln(cmd.OutOrStdout(), "[lint] ok")
-				}
-			}
-
-			if hasViolations {
-				return errors.New("pre-commit: violations found")
-			}
-
-			fmt.Fprintln(cmd.OutOrStdout(), "pre-commit: all checks passed")
-
-			return nil
+			return runPreCommit(cmd, modified, failFast)
 		},
 	}
 
@@ -110,4 +41,77 @@ This command is read-only: it never modifies files or alters the git index.`,
 	cmd.Flags().BoolVar(&failFast, "fail-fast", false, "stop after the first checker that reports violations")
 
 	return cmd
+}
+
+func runPreCommit(cmd *cobra.Command, modified, failFast bool) error {
+	ctx := cmd.Context()
+
+	files, err := checks.SelectFiles(ctx, modified)
+	if err != nil {
+		return fmt.Errorf("select files: %w", err)
+	}
+
+	if len(files) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "no staged or modified files to check")
+
+		return nil
+	}
+
+	// Build the ordered checker list.  Packages for the lint checker are
+	// derived from the .go files in the selected file set.
+	goPackages := checks.PackageDirsFromFiles(files)
+
+	allCheckers := []checks.Checker{
+		checks.NewFilesChecker(),
+		checks.NewYAMLChecker(),
+		checks.NewTOMLChecker(),
+		checks.NewFormatChecker(),
+	}
+
+	var hasViolations bool
+
+	results, err := checks.RunPreCommit(ctx, allCheckers, files, failFast)
+	if err != nil {
+		return fmt.Errorf("run pre-commit: %w", err)
+	}
+
+	for _, result := range results {
+		if result.HasViolations() {
+			hasViolations = true
+		}
+
+		for _, v := range result.Violations {
+			loc := v.File
+			if v.Line > 0 {
+				loc = fmt.Sprintf("%s:%d", v.File, v.Line)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "[%s] %s: %s\n", result.CheckerName, loc, v.Message)
+		}
+	}
+
+	// Run lint separately if we have Go files and haven't fail-fasted.
+	// golangci-lint output is streamed directly to stdout — no buffering or parsing.
+	if len(goPackages) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "[lint] skipped (no Go files in selection)")
+	} else if !failFast || !hasViolations {
+		lintResult, err := checks.NewLintChecker(cmd.OutOrStdout(), cmd.ErrOrStderr()).Check(ctx, goPackages)
+		if err != nil {
+			return fmt.Errorf("lint: %w", err)
+		}
+
+		if lintResult.HasViolations() {
+			hasViolations = true
+		} else {
+			fmt.Fprintln(cmd.OutOrStdout(), "[lint] ok")
+		}
+	}
+
+	if hasViolations {
+		return errors.New("pre-commit: violations found")
+	}
+
+	fmt.Fprintln(cmd.OutOrStdout(), "pre-commit: all checks passed")
+
+	return nil
 }

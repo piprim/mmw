@@ -1,6 +1,9 @@
 package checks
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // RunPreCommit runs all checkers sequentially against the provided files.
 //
@@ -19,7 +22,7 @@ func RunPreCommit(ctx context.Context, checkers []Checker, targets []string, fai
 	for _, checker := range checkers {
 		result, err := checker.Check(ctx, targets)
 		if err != nil {
-			return results, err
+			return results, fmt.Errorf("check %s: %w", checker.Name(), err)
 		}
 
 		results = append(results, result)

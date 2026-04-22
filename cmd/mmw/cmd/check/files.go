@@ -3,49 +3,27 @@ package check
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/piprim/mmw/internal/pkg/checks"
 	"github.com/spf13/cobra"
 )
 
-func NewFilesCmd() *cobra.Command {
-	var fix bool
+var errFixNotSupported = errors.New("--fix not supported by this checker")
 
-	cmd := &cobra.Command{
-		Use:   "files [files...]",
-		Short: "Check files for trailing whitespace, missing EOF newline, and size > 500 KB",
-		Long: `Check each file for:
+func NewFilesCmd() *cobra.Command {
+	return newCheckerCmd(
+		"files [files...]",
+		"Check files for trailing whitespace, missing EOF newline, and size > 500 KB",
+		`Check each file for:
   - trailing whitespace on any line
   - missing newline at end of file
   - file size > 500 KB (always reported; --fix has no effect)
 
 Defaults to all git-tracked files when no file arguments are given.`,
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			checker := checks.NewFilesChecker()
-
-			if fix {
-				fixer, ok := checker.(checks.Fixer)
-				if !ok {
-					return errors.New("files: --fix not supported by this checker")
-				}
-
-				return fixer.Fix(cmd.Context(), args)
-			}
-
-			result, err := checker.Check(cmd.Context(), args)
-			if err != nil {
-				return err
-			}
-
-			return printResult(cmd, result)
-		},
-	}
-
-	cmd.Flags().BoolVar(&fix, "fix", false, "rewrite files in-place (strips trailing whitespace, adds EOF newline)")
-
-	return cmd
+		checks.NewFilesChecker,
+		"rewrite files in-place (strips trailing whitespace, adds EOF newline)",
+	)
 }
 
 // printResult writes violations to stdout and returns an error when violations exist.
@@ -64,4 +42,51 @@ func printResult(cmd *cobra.Command, result checks.Result) error {
 	}
 
 	return nil
+}
+
+// newCheckerCmd builds a cobra.Command that runs newChecker and optionally
+// fixes in-place when --fix is set. use must start with the command name
+// (used for error messages), e.g. "files [files...]".
+func newCheckerCmd(
+	use, short, long string,
+	newChecker func() checks.Checker,
+	fixFlagDesc string,
+) *cobra.Command {
+	name := strings.Fields(use)[0]
+	var fix bool
+
+	cmd := &cobra.Command{
+		Use:           use,
+		Short:         short,
+		Long:          long,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			checker := newChecker()
+
+			if fix {
+				fixer, ok := checker.(checks.Fixer)
+				if !ok {
+					return fmt.Errorf("%s: %w", name, errFixNotSupported)
+				}
+
+				if err := fixer.Fix(cmd.Context(), args); err != nil {
+					return fmt.Errorf("%s fix: %w", name, err)
+				}
+
+				return nil
+			}
+
+			result, err := checker.Check(cmd.Context(), args)
+			if err != nil {
+				return fmt.Errorf("%s check: %w", name, err)
+			}
+
+			return printResult(cmd, result)
+		},
+	}
+
+	cmd.Flags().BoolVar(&fix, "fix", false, fixFlagDesc)
+
+	return cmd
 }

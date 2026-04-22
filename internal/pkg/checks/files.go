@@ -11,6 +11,8 @@ import (
 
 const maxFileSize = 512_000 // 500 KB
 
+const maxLineBufBytes = 1024 * 1024 // 1 MB — maximum line length for bufio.Scanner
+
 type filesChecker struct{}
 
 // NewFilesChecker returns a Checker (which also implements Fixer) that validates
@@ -19,7 +21,7 @@ func NewFilesChecker() Checker {
 	return &filesChecker{}
 }
 
-func (c *filesChecker) Name() string {
+func (*filesChecker) Name() string {
 	return "files"
 }
 
@@ -65,7 +67,7 @@ func (c *filesChecker) Fix(ctx context.Context, targets []string) error {
 	return nil
 }
 
-func (c *filesChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
+func (*filesChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
 	if len(targets) > 0 {
 		return targets, nil
 	}
@@ -99,7 +101,7 @@ func checkFileContent(path string) ([]Violation, error) {
 
 	lineNum := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1 MB max line
+	scanner.Buffer(make([]byte, maxLineBufBytes), maxLineBufBytes)
 
 	for scanner.Scan() {
 		lineNum++
@@ -151,7 +153,7 @@ func fixFileContent(path string) error {
 	var buf bytes.Buffer
 
 	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1 MB max line
+	scanner.Buffer(make([]byte, maxLineBufBytes), maxLineBufBytes)
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -162,5 +164,9 @@ func fixFileContent(path string) error {
 		return fmt.Errorf("scan: %w", err)
 	}
 
-	return os.WriteFile(path, buf.Bytes(), info.Mode().Perm())
+	if err := os.WriteFile(path, buf.Bytes(), info.Mode().Perm()); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+
+	return nil
 }

@@ -1,6 +1,8 @@
 package check
 
 import (
+	"fmt"
+
 	"github.com/piprim/mmw/internal/pkg/checks"
 	"github.com/spf13/cobra"
 )
@@ -20,7 +22,7 @@ Defaults to all tracked *.toml files when no arguments are given.`,
 
 			result, err := checker.Check(cmd.Context(), args)
 			if err != nil {
-				return err
+				return fmt.Errorf("toml checker failed: %w", err)
 			}
 
 			return printResult(cmd, result)
