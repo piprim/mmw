@@ -14,6 +14,8 @@ import (
 // Commit and BuildTime are read from the VCS info embedded by go build (Go 1.18+).
 var Version = "dev"
 
+const hashLen = 7
+
 func NewCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
@@ -32,6 +34,7 @@ func buildInfo() string {
 	if dirty {
 		return fmt.Sprintf("%s commit=%s* built=%s", Version, commit, commitTime)
 	}
+
 	return fmt.Sprintf("%s commit=%s built=%s", Version, commit, commitTime)
 }
 
@@ -43,8 +46,8 @@ func vcsInfo() (commit, commitTime string, dirty bool) {
 	for _, s := range info.Settings {
 		switch s.Key {
 		case "vcs.revision":
-			if len(s.Value) > 7 {
-				commit = s.Value[:7]
+			if len(s.Value) > hashLen {
+				commit = s.Value[:hashLen]
 			} else {
 				commit = s.Value
 			}
@@ -54,5 +57,6 @@ func vcsInfo() (commit, commitTime string, dirty bool) {
 			dirty = s.Value == "true"
 		}
 	}
+
 	return commit, commitTime, dirty
 }

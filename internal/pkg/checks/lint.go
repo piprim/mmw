@@ -8,6 +8,7 @@ import (
 )
 
 type lintChecker struct {
+	dir    string // working directory for golangci-lint; empty = current directory
 	out    io.Writer
 	errOut io.Writer
 }
@@ -20,6 +21,13 @@ type lintChecker struct {
 // When targets is empty it defaults to "./...".
 func NewLintChecker(out, errOut io.Writer) Checker {
 	return &lintChecker{out: out, errOut: errOut}
+}
+
+// NewLintCheckerAt is like NewLintChecker but runs golangci-lint with dir as
+// the working directory. Use this when linting a module that is not the current
+// working directory (e.g. workspace-wide lint iteration).
+func NewLintCheckerAt(dir string, out, errOut io.Writer) Checker {
+	return &lintChecker{dir: dir, out: out, errOut: errOut}
 }
 
 func (c *lintChecker) Name() string {
@@ -45,6 +53,7 @@ func (c *lintChecker) Check(ctx context.Context, targets []string) (Result, erro
 
 	args := append([]string{"run"}, targets...)
 	golangciCmd := exec.CommandContext(ctx, "golangci-lint", args...)
+	golangciCmd.Dir = c.dir
 	golangciCmd.Stdout = c.out
 	golangciCmd.Stderr = c.errOut
 

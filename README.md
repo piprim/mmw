@@ -683,46 +683,86 @@ Per-module checks are also discovered and run via `mmw check arch` in each modul
 
 ### `pkg/scaffold` — cookiecutter-style module scaffolding
 
-Generates new modules and contract definitions from a template tree driven by a `template.toml` manifest.
+Provides the embedded template tree and workspace helpers. Template rendering is delegated to [`goplt`](./goplt/README.md).
 
 ```go
-// Use the embedded templates (default):
+// Embedded templates (default) or an external directory:
 fsys := scaffold.EmbeddedFS()
+fsys  = os.DirFS("/path/to/my-templates")
 
-// Or load from an external directory:
-fsys = os.DirFS("/path/to/my-templates")
+// Load manifest and render with goplt:
+m, err   := goplt.LoadManifest(fsys)
+vars     := map[string]any{"Name": "payment", "OrgPrefix": "github.com/acme", ...}
+err       = goplt.NewGenerator().Generate(fsys, m, repoRoot, vars)
 
-// Load manifest (reads template.toml from fsys):
-m, err := scaffold.LoadManifest(fsys)
-
-// Collect variables, enrich with derived values:
-vars := map[string]any{"Name": "payment", "OrgPrefix": "github.com/acme", ...}
-scaffold.EnrichVars(vars) // adds NameTitle, ModulePath, ContractsPath, PkgDef, PlatformPath
-
-// Generate:
-err = scaffold.GenerateModule(fsys, repoRoot, vars)
-err = scaffold.GenerateContract(fsys, repoRoot, vars)
+// Update workspace files after generation:
+err = scaffold.UpdateGoWork(repoRoot, "payment")
+err = scaffold.UpdateMiseToml(repoRoot, "payment")
 ```
+
+Template functions available in every file via `goplt.DefaultFuncMap()`:
+
+| Function | Example |
+|---|---|
+| `pascal` | `{{.Name \| pascal}}` → `Payment` |
+| `lower` | `{{.Name \| lower}}` → `payment` |
+| `snake` | `{{.Name \| snake}}` → `my_payment` |
+| `camel` | `{{.Name \| camel}}` → `myPayment` |
+| `kebab` | `{{.Name \| kebab}}` → `my-payment` |
 
 **`template.toml` format:**
 
+Variables can be declared as plain values (short form) or as a sub-table with an optional `description` shown in the TUI:
+
 ```toml
+# short form
 [variables]
-name          = ""                                                              # text input (empty = required)
-org-prefix    = "github.com/acme"                                              # text with default
-with-connect  = true                                                           # bool confirm
-with-contract = true                                                           # bool confirm
-with-database = true                                                           # bool confirm
-license       = ["MIT", "BSD-3", "GNU GPL v3.0", "Apache Software License 2.0"] # select (first = default)
+name = ""
+
+# sub-table form — description shown as subtitle in the interactive form
+[variables.name]
+default     = ""
+description = "Module name in kebab-case (e.g. payment, order-management)"
+
+[variables.org-prefix]
+default     = "github.com/acme"
+description = "Go module path prefix for your organisation"
+
+[variables.contracts-path]
+default     = ""
+description = "Go module path of the shared contracts module"
+
+[variables.platform-path]
+default     = "github.com/piprim/mmw"
+description = "Go module path of the MMW platform (rarely changed)"
+
+[variables.with-connect]
+default     = true
+description = "Generate a Connect/gRPC inbound adapter and proto definition"
+
+[variables.with-contract]
+default     = true
+description = "Generate the Go contract package (service interface, DTOs, errors)"
+
+[variables.with-database]
+default     = true
+description = "Generate the PostgreSQL persistence adapter and migration scaffolding"
+
+[variables.license]
+default     = ["MIT", "BSD-3", "GNU GPL v3.0", "Apache Software License 2.0"]
+description = "License to include in the module"
 
 [conditions]
-"modules/{{.Name}}/internal/adapters/inbound/connect"     = "{{if .WithConnect}}true{{end}}"
-"modules/{{.Name}}/internal/adapters/inbound/inproc"      = "{{if .WithContract}}true{{end}}"
-"modules/{{.Name}}/internal/infra/persistence/migrations" = "{{if .WithDatabase}}true{{end}}"
-"modules/{{.Name}}/cmd/migration"                         = "{{if .WithDatabase}}true{{end}}"
-"contracts/go/application"                                = "{{if .WithContract}}true{{end}}"
-"contracts/proto"                                         = "{{if and .WithContract .WithConnect}}true{{end}}"
+"modules"                                                                     = "{{if .WithModule}}true{{end}}"
+"modules/{{.Name}}/internal/adapters/inbound/connect"                        = "{{if .WithConnect}}true{{end}}"
+"modules/{{.Name}}/internal/adapters/inbound/inproc"                         = "{{if .WithContract}}true{{end}}"
+"modules/{{.Name}}/internal/infra/persistence/migrations"                    = "{{if .WithDatabase}}true{{end}}"
+"modules/{{.Name}}/cmd/migration"                                             = "{{if .WithDatabase}}true{{end}}"
+"contracts/go/application"                                                    = "{{if .WithContract}}true{{end}}"
+"contracts/proto"                                                             = "{{if and .WithContract .WithConnect}}true{{end}}"
 ```
+
+`WithModule` is a routing flag set programmatically (`true` for `mmw new module`, `false` for `mmw new contract`) — it is not a TUI variable and is never shown to the user.
 
 Variable names normalise automatically: `with-connect`, `with_connect`, and `withConnect` all map to `.WithConnect` in templates.
 
@@ -738,14 +778,17 @@ mmw check files [--fix] [files...]        Check files for whitespace / EOF / siz
 mmw check format [--fix] [files...]       Check Go formatting with gofumpt
 mmw check toml [files...]                 Check TOML syntax
 mmw check yaml [files...]                 Check YAML syntax with yamllint
-mmw check lint [packages...]              Run golangci-lint
+mmw check lint [--workspace] [packages…]  Run golangci-lint
 mmw check pre-commit [--modified]         Run all checks as a pre-commit gate
 mmw test coverage [flags] [packages]      Print a test coverage table
+mmw version                               Print version, commit, and build time
 ```
 
 ### `mmw new module`
 
-Runs an interactive `huh` form built dynamically from the manifest's `[variables]` section. Prompts for module name, org prefix, and feature flags, then:
+Runs an interactive TUI form (via `goplt/tui`) built dynamically from the manifest's `[variables]` section. Each variable's `description` is shown as a subtitle. The org-prefix default is pre-filled from the workspace's `contracts/go.mod` when detected.
+
+Prompts for module name, org prefix, contracts path, and feature flags, then:
 
 1. Generates the full module tree under `modules/<name>/`
 2. Generates contract definitions under `contracts/` (when `with-contract = true`)
@@ -790,9 +833,11 @@ Parses each `.toml` file using `go-toml/v2` and reports syntax errors. No subpro
 
 Runs `yamllint -d relaxed` against each `.yaml`/`.yml` file. Requires `yamllint` on PATH. Defaults to all tracked `*.yaml`/`*.yml` files.
 
-### `mmw check lint [packages...]`
+### `mmw check lint [--workspace] [packages...]`
 
 Runs `golangci-lint run` against the specified Go packages. Linting runs at package level (not per-file) so package-scope linters fire correctly. Requires `golangci-lint` on PATH. Defaults to `./...`.
+
+`--workspace` iterates every module declared in `go.work` and lints each in turn. Used by the root `mise run lint` task.
 
 ### `mmw check pre-commit [--modified] [--fail-fast]`
 
@@ -857,3 +902,26 @@ Flags:
 | `-r`, `--run` | | Filter test names by regex |
 | `-t`, `--timeout` | | Set test timeout (e.g. `2m`) |
 | `-m`, `--min` | `0` | Exit 1 if any package falls below this % |
+
+### `mmw version`
+
+Prints the version, commit hash, and commit timestamp:
+
+```
+v1.2.3 commit=abc1234 built=2026-04-22T10:00:00Z
+```
+
+On a dirty working tree the commit hash is suffixed with `*`. When no tag is present the version is `dev`.
+
+The version string is injected at build time via `-ldflags`; commit and timestamp are read from the VCS info embedded by `go build` (Go 1.18+, no extra flags needed). Build and install via mise:
+
+```bash
+mise run build    # → ./bin/mmw
+mise run install  # → $GOBIN/mmw
+```
+
+---
+
+## LLM policy
+
+This project is in part assisted by LLMs.
