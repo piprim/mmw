@@ -79,6 +79,10 @@ func checkFileContent(path string) ([]Violation, error) {
 		return nil, fmt.Errorf("stat %s: %w", path, err)
 	}
 
+	if info.IsDir() {
+		return nil, nil // submodules and directories appear in git diff output; skip them
+	}
+
 	vs := []Violation{}
 
 	if info.Size() > maxFileSize {
@@ -128,6 +132,10 @@ func fixFileContent(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return fmt.Errorf("stat: %w", err)
+	}
+
+	if info.IsDir() {
+		return nil
 	}
 
 	if info.Size() > maxFileSize {
