@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	pfevents "github.com/piprim/mmw/pkg/platform/events"
 	"github.com/rotisserie/eris"
 )
+
+const tableNameRegex = "(^[a-z_0-9]+\\.?[a-z_0-9]+$)|(^[a-z_0-9]+$)"
 
 // EventsRelay coordinates the reliable transfer of events from a database outbox
 // table to an external messaging system (SystemEventBus).
@@ -26,14 +29,23 @@ func NewEnventsRelay(
 	bus pfevents.SystemEventBus,
 	logger *slog.Logger,
 	tableName string,
-) *EventsRelay {
+) (*EventsRelay, error) {
+	matched, err := regexp.MatchString(tableNameRegex, tableName)
+	if err != nil {
+		return nil, fmt.Errorf(`failed to compile regexp: %w`, err)
+	}
+
+	if !matched {
+		return nil, fmt.Errorf(`table name "%s" is not allowed`, tableName)
+	}
+
 	return &EventsRelay{
 		pool:      pool,
 		bus:       bus,
 		logger:    logger,
 		interval:  2 * time.Second, // Poll every 2 seconds
 		tableName: tableName,
-	}
+	}, nil
 }
 
 // Start runs continuously until the context is canceled (Graceful Shutdown)
