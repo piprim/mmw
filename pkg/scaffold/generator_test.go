@@ -188,8 +188,10 @@ func TestGenerateContract_ContractOnly(t *testing.T) {
 func TestGenerate_EmptyName(t *testing.T) {
 	fsys := fstest.MapFS{
 		"template.toml": &fstest.MapFile{Data: []byte(`
+description = "The description"
 [variables]
-name = ""
+kind = "input"
+required = true
 `)},
 		"{{.Name}}.go": &fstest.MapFile{Data: []byte(`package {{.Name}}`)},
 	}

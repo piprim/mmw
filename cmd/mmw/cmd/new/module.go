@@ -57,7 +57,7 @@ func runNewModule(templatePath string) error {
 		}
 
 		if d := detectOrgPrefix(root); d != "" {
-			m.Variables[i].Default = d
+			m.Variables[i].Value = d
 		}
 	}
 
