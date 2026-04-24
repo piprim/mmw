@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/piprim/mmw/pkg/platform/core"
 	pfevents "github.com/piprim/mmw/pkg/platform/events"
 	"github.com/rotisserie/eris"
 )
@@ -48,7 +49,9 @@ func NewEventsRelay(
 	}, nil
 }
 
-// Start runs continuously until the context is canceled (Graceful Shutdown)
+// Start polls the outbox table on a fixed interval, publishing pending events to the bus.
+// It blocks until ctx is cancelled; transient failures are logged and retried on the next tick.
+// Use AsModule to integrate with platform.New.
 func (r *EventsRelay) Start(ctx context.Context) {
 	r.logger.Info("starting outbox relay worker")
 	ticker := time.NewTicker(r.interval)
@@ -66,6 +69,20 @@ func (r *EventsRelay) Start(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// moduleFunc adapts a blocking func(context.Context) to core.Module.
+type moduleFunc func(context.Context) error
+
+func (f moduleFunc) Start(ctx context.Context) error { return f(ctx) }
+
+// AsModule returns a core.Module adapter so the relay can be passed to platform.New.
+// The module's Start blocks until ctx is cancelled and always returns nil.
+func (r *EventsRelay) AsModule() core.Module {
+	return moduleFunc(func(ctx context.Context) error {
+		r.Start(ctx)
+		return nil
+	})
 }
 
 func (r *EventsRelay) processBatch(ctx context.Context) error {
