@@ -1,6 +1,7 @@
 package scaffold
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -24,7 +25,7 @@ func UpdateGoWork(repoRoot, name string) error {
 	// Locate the use block, then find its closing ")" to insert before it.
 	// Searching from the "use (" position avoids accidentally matching a
 	// closing ")" in an earlier replace () block.
-	useIdx := strings.Index(string(content), "use (")
+	useIdx := bytes.Index(content, []byte("use ("))
 	if useIdx == -1 {
 		return errors.New("could not find use block in go.work")
 	}

@@ -87,6 +87,26 @@ func PackageDirsFromFiles(files []string) []string {
 	return dirs
 }
 
+// resolveTargets returns targets unchanged when non-empty. When targets is
+// empty it fetches all git-tracked files and filters by exts (pass no exts to
+// return all tracked files without filtering).
+func resolveTargets(ctx context.Context, targets []string, exts ...string) ([]string, error) {
+	if len(targets) > 0 {
+		return targets, nil
+	}
+
+	all, err := TrackedFiles(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(exts) == 0 {
+		return all, nil
+	}
+
+	return FilterByExt(all, exts...), nil
+}
+
 // FilterByExt returns only the files whose extension matches one of exts.
 func FilterByExt(files []string, exts ...string) []string {
 	want := make(map[string]struct{}, len(exts))

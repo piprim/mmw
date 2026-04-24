@@ -24,7 +24,7 @@ func (*tomlChecker) Name() string {
 // Check parses each .toml file in targets and reports syntax errors.
 // When targets is empty it defaults to all *.toml files under the working directory.
 func (c *tomlChecker) Check(ctx context.Context, targets []string) (Result, error) {
-	files, err := c.resolveTargets(ctx, targets)
+	files, err := resolveTargets(ctx, targets, ".toml")
 	if err != nil {
 		return Result{}, err
 	}
@@ -54,17 +54,4 @@ func (c *tomlChecker) Check(ctx context.Context, targets []string) (Result, erro
 	}
 
 	return result, nil
-}
-
-func (*tomlChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
-	if len(targets) > 0 {
-		return targets, nil
-	}
-
-	all, err := TrackedFiles(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return FilterByExt(all, ".toml"), nil
 }

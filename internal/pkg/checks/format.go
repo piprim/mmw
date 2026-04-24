@@ -27,7 +27,7 @@ func (*formatChecker) Name() string {
 // Non-.go files in targets are silently skipped.
 // When targets is empty it defaults to all *.go files under the working directory.
 func (c *formatChecker) Check(ctx context.Context, targets []string) (Result, error) {
-	files, err := c.resolveTargets(ctx, targets)
+	files, err := resolveTargets(ctx, targets, goExt)
 	if err != nil {
 		return Result{}, err
 	}
@@ -59,8 +59,8 @@ func (c *formatChecker) Check(ctx context.Context, targets []string) (Result, er
 }
 
 // Fix rewrites each .go file in-place with the output of gofumpt.
-func (c *formatChecker) Fix(ctx context.Context, targets []string) error {
-	files, err := c.resolveTargets(ctx, targets)
+func (*formatChecker) Fix(ctx context.Context, targets []string) error {
+	files, err := resolveTargets(ctx, targets, goExt)
 	if err != nil {
 		return err
 	}
@@ -76,19 +76,6 @@ func (c *formatChecker) Fix(ctx context.Context, targets []string) error {
 	}
 
 	return nil
-}
-
-func (*formatChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
-	if len(targets) > 0 {
-		return targets, nil
-	}
-
-	all, err := TrackedFiles(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return FilterByExt(all, goExt), nil
 }
 
 func isFormatted(path string) (bool, error) {

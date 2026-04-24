@@ -24,7 +24,7 @@ func (*yamlChecker) Name() string {
 // When targets is empty it defaults to all *.yaml/*.yml files under the working directory.
 // Returns an error if yamllint is not found on PATH or if the context is cancelled.
 func (c *yamlChecker) Check(ctx context.Context, targets []string) (Result, error) {
-	files, err := c.resolveTargets(ctx, targets)
+	files, err := resolveTargets(ctx, targets, ".yaml", ".yml")
 	if err != nil {
 		return Result{}, err
 	}
@@ -70,17 +70,4 @@ func (c *yamlChecker) Check(ctx context.Context, targets []string) (Result, erro
 	}
 
 	return result, nil
-}
-
-func (*yamlChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
-	if len(targets) > 0 {
-		return targets, nil
-	}
-
-	all, err := TrackedFiles(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return FilterByExt(all, ".yaml", ".yml"), nil
 }

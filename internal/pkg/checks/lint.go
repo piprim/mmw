@@ -48,7 +48,7 @@ func (c *lintChecker) Check(ctx context.Context, targets []string) (Result, erro
 		return Result{}, fmt.Errorf("checks: golangci-lint not found on PATH: %w", err)
 	}
 
-	runTargets, skip := resolveTargets(targets)
+	runTargets, skip := resolveLintTargets(targets)
 	if skip {
 		fmt.Fprintln(c.out, "[lint] skipped (no Go files in selection)")
 
@@ -79,12 +79,12 @@ func (c *lintChecker) Check(ctx context.Context, targets []string) (Result, erro
 	return result, nil
 }
 
-// resolveTargets returns the package patterns to pass to golangci-lint.
+// resolveLintTargets returns the package patterns to pass to golangci-lint.
 //
 // If any target is a .go file path, packages are derived via PackageDirsFromFiles;
 // skip is true when the derivation yields nothing (no Go files in the selection).
 // Otherwise targets are used as-is, defaulting to ./... when empty.
-func resolveTargets(targets []string) (pkgs []string, skip bool) {
+func resolveLintTargets(targets []string) (pkgs []string, skip bool) {
 	if hasGoFileTargets(targets) {
 		pkgs = PackageDirsFromFiles(targets)
 

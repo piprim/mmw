@@ -28,7 +28,7 @@ func (*filesChecker) Name() string {
 // Check validates each target file. When targets is empty it falls back to
 // all git-tracked files under the working directory.
 func (c *filesChecker) Check(ctx context.Context, targets []string) (Result, error) {
-	files, err := c.resolveTargets(ctx, targets)
+	files, err := resolveTargets(ctx, targets)
 	if err != nil {
 		return Result{}, err
 	}
@@ -52,8 +52,8 @@ func (c *filesChecker) Check(ctx context.Context, targets []string) (Result, err
 
 // Fix rewrites each target file in-place, stripping trailing whitespace and
 // appending a missing EOF newline. Size violations are never auto-fixed.
-func (c *filesChecker) Fix(ctx context.Context, targets []string) error {
-	files, err := c.resolveTargets(ctx, targets)
+func (*filesChecker) Fix(ctx context.Context, targets []string) error {
+	files, err := resolveTargets(ctx, targets)
 	if err != nil {
 		return err
 	}
@@ -65,14 +65,6 @@ func (c *filesChecker) Fix(ctx context.Context, targets []string) error {
 	}
 
 	return nil
-}
-
-func (*filesChecker) resolveTargets(ctx context.Context, targets []string) ([]string, error) {
-	if len(targets) > 0 {
-		return targets, nil
-	}
-
-	return TrackedFiles(ctx)
 }
 
 func checkFileContent(path string) ([]Violation, error) {
