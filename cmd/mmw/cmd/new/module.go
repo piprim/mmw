@@ -1,6 +1,7 @@
 package new
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -25,8 +26,8 @@ func NewModuleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "module",
 		Short: "Scaffold a new module interactively",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return runNewModule(templatePath)
+		RunE: func(c *cobra.Command, _ []string) error {
+			return runNewModule(c.Context(), templatePath)
 		},
 	}
 	cmd.Flags().StringVar(
@@ -37,7 +38,7 @@ func NewModuleCmd() *cobra.Command {
 	return cmd
 }
 
-func runNewModule(templatePath string) error {
+func runNewModule(ctx context.Context, templatePath string) error {
 	root := platform.RootRepo()
 
 	fsys, err := selectTemplateFS(templatePath)
@@ -74,7 +75,7 @@ func runNewModule(templatePath string) error {
 		return fmt.Errorf("generate module: %w", err)
 	}
 
-	if err := goplt.RunHooks(m, root); err != nil {
+	if err := goplt.RunHooks(ctx, m, root); err != nil {
 		return fmt.Errorf("post-generate hooks: %w", err)
 	}
 

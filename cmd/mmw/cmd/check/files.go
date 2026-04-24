@@ -86,7 +86,9 @@ func newCheckerCmd(
 		},
 	}
 
-	cmd.Flags().BoolVar(&fix, "fix", false, fixFlagDesc)
+	if fixFlagDesc != "" {
+		cmd.Flags().BoolVar(&fix, "fix", false, fixFlagDesc)
+	}
 
 	return cmd
 }
