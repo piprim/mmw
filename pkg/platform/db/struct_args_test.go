@@ -20,29 +20,28 @@ type testSnapWithOptions struct {
 	NoTag string
 }
 
-func TestStructArgs_basic(t *testing.T) {
-	snap := testSnap{ID: "abc", Name: "foo", Score: 42}
-	args := StructArgs(snap)
-	assert.Equal(t, map[string]any{"id": "abc", "name": "foo", "score": 42}, args)
-}
+func TestStructArgs(t *testing.T) {
+	t.Run("maps tagged fields to name→value pairs", func(t *testing.T) {
+		snap := testSnap{ID: "abc", Name: "foo", Score: 42}
+		assert.Equal(t, map[string]any{"id": "abc", "name": "foo", "score": 42}, StructArgs(snap))
+	})
 
-func TestStructArgs_tagOptions(t *testing.T) {
-	snap := testSnapWithOptions{ID: "x", Skip: "ignored", NoTag: "also ignored"}
-	args := StructArgs(snap)
-	assert.Equal(t, map[string]any{"id": "x"}, args)
-}
+	t.Run("omits fields tagged with dash or lacking db tag", func(t *testing.T) {
+		snap := testSnapWithOptions{ID: "x", Skip: "ignored", NoTag: "also ignored"}
+		assert.Equal(t, map[string]any{"id": "x"}, StructArgs(snap))
+	})
 
-func TestStructArgs_nilPointer(t *testing.T) {
-	type withPtr struct {
-		Val *time.Time `db:"val"`
-	}
-	args := StructArgs(withPtr{Val: nil})
-	require.Contains(t, args, "val")
-	assert.Nil(t, args["val"])
-}
+	t.Run("includes nil pointer field", func(t *testing.T) {
+		type withPtr struct {
+			Val *time.Time `db:"val"`
+		}
+		args := StructArgs(withPtr{Val: nil})
+		require.Contains(t, args, "val")
+		assert.Nil(t, args["val"])
+	})
 
-func TestStructArgs_pointerDereference(t *testing.T) {
-	snap := testSnap{ID: "abc", Name: "foo", Score: 42}
-	args := StructArgs(&snap)
-	assert.Equal(t, map[string]any{"id": "abc", "name": "foo", "score": 42}, args)
+	t.Run("dereferences pointer receiver", func(t *testing.T) {
+		snap := testSnap{ID: "abc", Name: "foo", Score: 42}
+		assert.Equal(t, map[string]any{"id": "abc", "name": "foo", "score": 42}, StructArgs(&snap))
+	})
 }

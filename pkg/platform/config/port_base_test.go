@@ -26,16 +26,18 @@ func TestPort_String(t *testing.T) {
 }
 
 func TestBase_GetAppEnv(t *testing.T) {
-	t.Setenv("APP_ENV", "production")
-	b := &Base{Environment: EnvironmentProduction}
-	stringer := b.GetAppEnv()
+	t.Run("returns environment stringer for production", func(t *testing.T) {
+		t.Setenv("APP_ENV", "production")
+		b := &Base{Environment: EnvironmentProduction}
+		stringer := b.GetAppEnv()
 
-	assert.NotNil(t, stringer)
-	assert.Equal(t, "production", stringer.String())
-}
+		assert.NotNil(t, stringer)
+		assert.Equal(t, "production", stringer.String())
+	})
 
-func TestBase_GetAppEnv_Development(t *testing.T) {
-	t.Setenv("APP_ENV", "development")
-	b := &Base{Environment: EnvironmentDevelopment}
-	assert.Equal(t, "development", b.GetAppEnv().String())
+	t.Run("returns environment stringer for development", func(t *testing.T) {
+		t.Setenv("APP_ENV", "development")
+		b := &Base{Environment: EnvironmentDevelopment}
+		assert.Equal(t, "development", b.GetAppEnv().String())
+	})
 }

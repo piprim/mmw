@@ -26,109 +26,83 @@ func (m *mockChecker) Check(_ context.Context, _ []string) (checks.Result, error
 	return m.result, nil
 }
 
-func TestRunPreCommit_EmptyCheckers(t *testing.T) {
-	results, err := checks.RunPreCommit(t.Context(), []checks.Checker{}, []string{}, false)
+func TestRunPreCommit(t *testing.T) {
+	t.Run("empty checkers returns no results", func(t *testing.T) {
+		results, err := checks.RunPreCommit(t.Context(), []checks.Checker{}, []string{}, false)
+		require.NoError(t, err)
+		assert.Empty(t, results)
+	})
 
-	require.NoError(t, err)
-	assert.Empty(t, results)
-}
+	t.Run("collects results from all checkers", func(t *testing.T) {
+		c1 := &mockChecker{
+			name:   "checker-a",
+			result: checks.Result{CheckerName: "checker-a", Violations: []checks.Violation{{File: "a.go", Message: "issue"}}},
+		}
+		c2 := &mockChecker{
+			name:   "checker-b",
+			result: checks.Result{CheckerName: "checker-b", Violations: []checks.Violation{}},
+		}
 
-func TestRunPreCommit_CollectsAllResults(t *testing.T) {
-	c1 := &mockChecker{
-		name: "checker-a",
-		result: checks.Result{
-			CheckerName: "checker-a",
-			Violations:  []checks.Violation{{File: "a.go", Message: "issue"}},
-		},
-	}
-	c2 := &mockChecker{
-		name: "checker-b",
-		result: checks.Result{
-			CheckerName: "checker-b",
-			Violations:  []checks.Violation{},
-		},
-	}
+		results, err := checks.RunPreCommit(t.Context(), []checks.Checker{c1, c2}, []string{"a.go"}, false)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		assert.True(t, results[0].HasViolations())
+		assert.False(t, results[1].HasViolations())
+	})
 
-	results, err := checks.RunPreCommit(t.Context(), []checks.Checker{c1, c2}, []string{"a.go"}, false)
+	t.Run("continues after violation without fail-fast", func(t *testing.T) {
+		c1 := &mockChecker{
+			name:   "first",
+			result: checks.Result{CheckerName: "first", Violations: []checks.Violation{{Message: "violation in first"}}},
+		}
+		c2 := &mockChecker{
+			name:   "second",
+			result: checks.Result{CheckerName: "second", Violations: []checks.Violation{{Message: "violation in second"}}},
+		}
 
-	require.NoError(t, err)
-	require.Len(t, results, 2)
-	assert.True(t, results[0].HasViolations())
-	assert.False(t, results[1].HasViolations())
-}
+		results, err := checks.RunPreCommit(t.Context(), []checks.Checker{c1, c2}, []string{"x.go"}, false)
+		require.NoError(t, err)
+		require.Len(t, results, 2, "both checkers must run even when first has violations")
+		assert.True(t, results[0].HasViolations())
+		assert.True(t, results[1].HasViolations())
+	})
 
-func TestRunPreCommit_ContinuesAfterViolation(t *testing.T) {
-	// Both checkers have violations; without fail-fast both must run.
-	c1 := &mockChecker{
-		name: "first",
-		result: checks.Result{
-			CheckerName: "first",
-			Violations:  []checks.Violation{{Message: "violation in first"}},
-		},
-	}
-	c2 := &mockChecker{
-		name: "second",
-		result: checks.Result{
-			CheckerName: "second",
-			Violations:  []checks.Violation{{Message: "violation in second"}},
-		},
-	}
+	t.Run("stops after first checker with violations when fail-fast is set", func(t *testing.T) {
+		c1 := &mockChecker{
+			name:   "first",
+			result: checks.Result{CheckerName: "first", Violations: []checks.Violation{{Message: "violation"}}},
+		}
+		c2 := &mockChecker{
+			name:   "second",
+			result: checks.Result{CheckerName: "second", Violations: []checks.Violation{}},
+		}
 
-	results, err := checks.RunPreCommit(t.Context(), []checks.Checker{c1, c2}, []string{"x.go"}, false)
+		results, err := checks.RunPreCommit(t.Context(), []checks.Checker{c1, c2}, []string{"x.go"}, true)
+		require.NoError(t, err)
+		assert.Len(t, results, 1, "fail-fast must stop after the first checker with violations")
+	})
 
-	require.NoError(t, err)
-	require.Len(t, results, 2, "both checkers must run even when first has violations")
-	assert.True(t, results[0].HasViolations())
-	assert.True(t, results[1].HasViolations())
-}
+	t.Run("propagates internal checker error", func(t *testing.T) {
+		c := &mockChecker{name: "broken", err: assert.AnError}
 
-func TestRunPreCommit_FailFast_StopsAfterFirstViolation(t *testing.T) {
-	c1 := &mockChecker{
-		name: "first",
-		result: checks.Result{
-			CheckerName: "first",
-			Violations:  []checks.Violation{{Message: "violation"}},
-		},
-	}
-	c2 := &mockChecker{
-		name: "second",
-		result: checks.Result{
-			CheckerName: "second",
-			Violations:  []checks.Violation{},
-		},
-	}
+		results, err := checks.RunPreCommit(t.Context(), []checks.Checker{c}, []string{"x.go"}, false)
+		require.Error(t, err)
+		assert.Empty(t, results, "no results should precede the first checker that errors")
+	})
 
-	results, err := checks.RunPreCommit(t.Context(), []checks.Checker{c1, c2}, []string{"x.go"}, true)
+	t.Run("cancelled context is passed through to checkers", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
 
-	require.NoError(t, err)
-	assert.Len(t, results, 1, "fail-fast must stop after the first checker with violations")
-}
+		// RunPreCommit does not short-circuit on ctx.Err(); cancellation is delegated
+		// to each Checker implementation. A checker that ignores context will still run.
+		c := &mockChecker{
+			name:   "ctx-unaware",
+			result: checks.Result{CheckerName: "ctx-unaware", Violations: []checks.Violation{}},
+		}
 
-func TestRunPreCommit_PropagatesInternalError(t *testing.T) {
-	c := &mockChecker{
-		name: "broken",
-		err:  assert.AnError,
-	}
-
-	results, err := checks.RunPreCommit(t.Context(), []checks.Checker{c}, []string{"x.go"}, false)
-
-	require.Error(t, err)
-	assert.Empty(t, results, "no results should precede the first checker that errors")
-}
-
-func TestRunPreCommit_CancelledContext_PassedThrough(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel() // pre-cancel
-
-	// RunPreCommit does not short-circuit on ctx.Err(); cancellation is delegated
-	// to each Checker implementation. A checker that ignores context will still run.
-	c := &mockChecker{
-		name:   "ctx-unaware",
-		result: checks.Result{CheckerName: "ctx-unaware", Violations: []checks.Violation{}},
-	}
-
-	results, err := checks.RunPreCommit(ctx, []checks.Checker{c}, []string{}, false)
-
-	require.NoError(t, err)
-	assert.Len(t, results, 1)
+		results, err := checks.RunPreCommit(ctx, []checks.Checker{c}, []string{}, false)
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+	})
 }

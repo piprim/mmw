@@ -13,77 +13,77 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSafeGo_NormalExecution(t *testing.T) {
-	var wg sync.WaitGroup
-	wg.Add(1)
+func TestSafeGo(t *testing.T) {
+	t.Run("executes function normally", func(t *testing.T) {
+		var wg sync.WaitGroup
+		wg.Add(1)
 
-	called := false
-	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+		called := false
+		logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 
-	platform.SafeGo(context.Background(), logger, func() {
-		defer wg.Done()
-		called = true
+		platform.SafeGo(context.Background(), logger, func() {
+			defer wg.Done()
+			called = true
+		})
+
+		wg.Wait()
+		assert.True(t, called)
 	})
 
-	wg.Wait()
-	assert.True(t, called)
-}
+	t.Run("logs crash on error panic", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
 
-func TestSafeGo_PanicWithError(t *testing.T) {
-	var buf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+		done := make(chan struct{})
 
-	done := make(chan struct{})
+		platform.SafeGo(context.Background(), logger, func() {
+			defer close(done)
+			panic(errors.New("boom"))
+		})
 
-	platform.SafeGo(context.Background(), logger, func() {
-		defer close(done)
-		panic(errors.New("boom"))
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("goroutine did not complete")
+		}
+
+		time.Sleep(10 * time.Millisecond)
+		assert.Contains(t, buf.String(), "background worker crashed")
 	})
 
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("goroutine did not complete")
-	}
+	t.Run("logs crash on non-error panic", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	// The recover defer runs after fn()'s defers; give it a moment to log.
-	time.Sleep(10 * time.Millisecond)
-	assert.Contains(t, buf.String(), "background worker crashed")
-}
+		done := make(chan struct{})
 
-func TestSafeGo_PanicWithNonError(t *testing.T) {
-	var buf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+		platform.SafeGo(context.Background(), logger, func() {
+			defer close(done)
+			panic("unexpected string panic")
+		})
 
-	done := make(chan struct{})
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("goroutine did not complete")
+		}
 
-	platform.SafeGo(context.Background(), logger, func() {
-		defer close(done)
-		panic("unexpected string panic")
+		time.Sleep(10 * time.Millisecond)
+		assert.Contains(t, buf.String(), "background worker crashed")
 	})
 
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("goroutine did not complete")
-	}
+	t.Run("emits no log when no panic occurs", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	time.Sleep(10 * time.Millisecond)
-	assert.Contains(t, buf.String(), "background worker crashed")
-}
+		var wg sync.WaitGroup
+		wg.Add(1)
 
-func TestSafeGo_NoPanic_NoLog(t *testing.T) {
-	var buf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+		platform.SafeGo(context.Background(), logger, func() {
+			defer wg.Done()
+		})
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	platform.SafeGo(context.Background(), logger, func() {
-		defer wg.Done()
-		// no panic
+		wg.Wait()
+		assert.Empty(t, buf.String())
 	})
-
-	wg.Wait()
-	assert.Empty(t, buf.String())
 }

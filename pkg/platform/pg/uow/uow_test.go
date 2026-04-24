@@ -169,23 +169,26 @@ func TestGetExecutor_WithTransaction(t *testing.T) {
 }
 
 func TestGetExecutor_PreservesTransactionIdentity(t *testing.T) {
-	tx := &mockTx{}
-	ctx := context.WithValue(context.Background(), txKey{}, tx)
+	t.Run("returns the same transaction instance from context", func(t *testing.T) {
+		tx := &mockTx{}
+		ctx := context.WithValue(context.Background(), txKey{}, tx)
 
-	executor := getExecutor(ctx, (*pgxpool.Pool)(nil))
+		executor := getExecutor(ctx, (*pgxpool.Pool)(nil))
 
-	// The executor should be the exact same transaction instance
-	extractedTx, ok := executor.(pgx.Tx)
-	assert.True(t, ok, "should return a transaction")
-	assert.Equal(t, tx, extractedTx, "should return the same transaction instance")
+		extractedTx, ok := executor.(pgx.Tx)
+		assert.True(t, ok, "should return a transaction")
+		assert.Equal(t, tx, extractedTx, "should return the same transaction instance")
+	})
 }
 
 func TestNewUnitOfWork(t *testing.T) {
-	pool := &pgxpool.Pool{}
-	uow := New(pool)
+	t.Run("stores pool reference", func(t *testing.T) {
+		pool := &pgxpool.Pool{}
+		uow := New(pool)
 
-	assert.NotNil(t, uow, "should create a non-nil UnitOfWork")
-	assert.Equal(t, pool, uow.pool, "should store the pool reference")
+		assert.NotNil(t, uow)
+		assert.Equal(t, pool, uow.pool)
+	})
 }
 
 func TestUnitOfWork_WithTransaction_Success(t *testing.T) {

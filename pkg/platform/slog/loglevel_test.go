@@ -29,11 +29,22 @@ func TestLogLevel_SlogLevel(t *testing.T) {
 }
 
 func TestLogLevel_String(t *testing.T) {
-	assert.Equal(t, "debug", LogLevel("debug").String())
-	assert.Equal(t, "info", LogLevel("info").String())
-	assert.Equal(t, "warn", LogLevel("warn").String())
-	assert.Equal(t, "error", LogLevel("error").String())
-	assert.Equal(t, "", LogLevel("").String())
+	tests := []struct {
+		level    LogLevel
+		expected string
+	}{
+		{"debug", "debug"},
+		{"info", "info"},
+		{"warn", "warn"},
+		{"error", "error"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.level), func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.level.String())
+		})
+	}
 }
 
 func TestLogLevel_IsValid(t *testing.T) {

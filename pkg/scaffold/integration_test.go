@@ -16,50 +16,47 @@ import (
 // TestGenerate_FullOptionOutput generates a module into a temp directory
 // that mirrors the real repo structure and verifies the files are generated correctly.
 func TestGenerate_FullOptionOutput(t *testing.T) {
-	repoRoot := findRepoRoot(t)
+	t.Run("generates all files for a full-option module in a real repo layout", func(t *testing.T) {
+		repoRoot := findRepoRoot(t)
+		dir := t.TempDir()
 
-	dir := t.TempDir()
+		require.NoError(t, copyFile(
+			filepath.Join(repoRoot, "go.work"),
+			filepath.Join(dir, "go.work"),
+		))
 
-	// Seed go.work
-	require.NoError(t, copyFile(
-		filepath.Join(repoRoot, "go.work"),
-		filepath.Join(dir, "go.work"),
-	))
+		fsys := scaffold.EmbeddedFS()
+		m, err := goplt.LoadManifest(fsys)
+		require.NoError(t, err)
 
-	fsys := scaffold.EmbeddedFS()
+		vars := map[string]any{
+			"Name":          "demomod",
+			"OrgPrefix":     "github.com/pivaldi",
+			"ContractsPath": "github.com/pivaldi/mmw-contracts",
+			"PlatformPath":  "github.com/piprim/mmw",
+			"WithModule":    true,
+			"WithConnect":   true,
+			"WithContract":  true,
+			"WithDatabase":  true,
+			"License":       "MIT",
+		}
 
-	m, err := goplt.LoadManifest(fsys)
-	require.NoError(t, err)
+		require.NoError(t, goplt.NewGenerator().Generate(fsys, m, dir, vars))
+		require.NoError(t, scaffold.UpdateGoWork(dir, "demomod"))
 
-	vars := map[string]any{
-		"Name":          "demomod",
-		"OrgPrefix":     "github.com/pivaldi",
-		"ContractsPath": "github.com/pivaldi/mmw-contracts",
-		"PlatformPath":  "github.com/piprim/mmw",
-		"WithModule":    true,
-		"WithConnect":   true,
-		"WithContract":  true,
-		"WithDatabase":  true,
-		"License":       "MIT",
-	}
+		goWorkContent, err := os.ReadFile(filepath.Join(dir, "go.work"))
+		require.NoError(t, err)
+		assert.Contains(t, string(goWorkContent), "./modules/demomod")
 
-	require.NoError(t, goplt.NewGenerator().Generate(fsys, m, dir, vars))
-	require.NoError(t, scaffold.UpdateGoWork(dir, "demomod"))
+		assertFileExists(t, dir, "modules/demomod/go.mod")
+		assertFileContains(t, dir, "modules/demomod/go.mod", "module github.com/pivaldi/demomod")
+		assertFileExists(t, dir, "modules/demomod/demomodmod.go")
+		assertFileExists(t, dir, "contracts/go/application/demomod/api.go")
+		assertFileExists(t, dir, "contracts/proto/demomod/v1/demomod.proto")
+		assertFileExists(t, dir, "modules/demomod/internal/infra/persistence/migrations/migrations.go")
 
-	// Verify go.work now contains demomod
-	goWorkContent, err := os.ReadFile(filepath.Join(dir, "go.work"))
-	require.NoError(t, err)
-	assert.Contains(t, string(goWorkContent), "./modules/demomod")
-
-	// Verify key files generated
-	assertFileExists(t, dir, "modules/demomod/go.mod")
-	assertFileContains(t, dir, "modules/demomod/go.mod", "module github.com/pivaldi/demomod")
-	assertFileExists(t, dir, "modules/demomod/demomodmod.go")
-	assertFileExists(t, dir, "contracts/go/application/demomod/api.go")
-	assertFileExists(t, dir, "contracts/proto/demomod/v1/demomod.proto")
-	assertFileExists(t, dir, "modules/demomod/internal/infra/persistence/migrations/migrations.go")
-
-	t.Logf("Generated module at: %s/modules/demomod", dir)
+		t.Logf("Generated module at: %s/modules/demomod", dir)
+	})
 }
 
 func findRepoRoot(t *testing.T) string {
@@ -82,5 +79,6 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
+
 	return os.WriteFile(dst, data, 0644)
 }

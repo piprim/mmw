@@ -13,74 +13,69 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewErrorLoggingInterceptor_NoError(t *testing.T) {
-	var buf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+func TestNewErrorLoggingInterceptor(t *testing.T) {
+	t.Run("emits no log on success", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+		interceptor := pfconnect.NewErrorLoggingInterceptor(logger)
 
-	interceptor := pfconnect.NewErrorLoggingInterceptor(logger)
+		next := connect.UnaryFunc(func(_ context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
+			return connect.NewResponse(&struct{}{}), nil
+		})
 
-	next := connect.UnaryFunc(func(_ context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
-		return connect.NewResponse(&struct{}{}), nil
+		_, err := interceptor(next)(context.Background(), connect.NewRequest(&struct{}{}))
+
+		require.NoError(t, err)
+		assert.Empty(t, buf.String())
 	})
 
-	req := connect.NewRequest(&struct{}{})
-	_, err := interceptor(next)(context.Background(), req)
+	t.Run("logs handler error on plain error", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+		interceptor := pfconnect.NewErrorLoggingInterceptor(logger)
 
-	require.NoError(t, err)
-	assert.Empty(t, buf.String(), "no log should be emitted on success")
-}
+		next := connect.UnaryFunc(func(_ context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
+			return nil, errors.New("something broke")
+		})
 
-func TestNewErrorLoggingInterceptor_WithPlainError(t *testing.T) {
-	var buf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+		_, err := interceptor(next)(context.Background(), connect.NewRequest(&struct{}{}))
 
-	interceptor := pfconnect.NewErrorLoggingInterceptor(logger)
-
-	next := connect.UnaryFunc(func(_ context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
-		return nil, errors.New("something broke")
+		require.Error(t, err)
+		assert.Contains(t, buf.String(), "handler error")
 	})
 
-	req := connect.NewRequest(&struct{}{})
-	_, err := interceptor(next)(context.Background(), req)
+	t.Run("logs handler error on connect error with cause", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+		interceptor := pfconnect.NewErrorLoggingInterceptor(logger)
 
-	require.Error(t, err)
-	assert.Contains(t, buf.String(), "handler error")
-}
+		cause := errors.New("underlying domain error")
+		connectErr := connect.NewError(connect.CodeInternal, cause)
 
-func TestNewErrorLoggingInterceptor_WithConnectError_LogsCause(t *testing.T) {
-	var buf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+		next := connect.UnaryFunc(func(_ context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
+			return nil, connectErr
+		})
 
-	interceptor := pfconnect.NewErrorLoggingInterceptor(logger)
+		_, err := interceptor(next)(context.Background(), connect.NewRequest(&struct{}{}))
 
-	cause := errors.New("underlying domain error")
-	connectErr := connect.NewError(connect.CodeInternal, cause)
-
-	next := connect.UnaryFunc(func(_ context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
-		return nil, connectErr
+		require.Error(t, err)
+		assert.Contains(t, buf.String(), "handler error")
 	})
 
-	req := connect.NewRequest(&struct{}{})
-	_, err := interceptor(next)(context.Background(), req)
+	t.Run("passes through successful response unchanged", func(t *testing.T) {
+		logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+		interceptor := pfconnect.NewErrorLoggingInterceptor(logger)
 
-	require.Error(t, err)
-	assert.Contains(t, buf.String(), "handler error")
-}
+		type payload struct{ Value string }
+		expected := &payload{Value: "result"}
 
-func TestNewErrorLoggingInterceptor_PassesThroughResponse(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	interceptor := pfconnect.NewErrorLoggingInterceptor(logger)
+		next := connect.UnaryFunc(func(_ context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
+			return connect.NewResponse(expected), nil
+		})
 
-	type payload struct{ Value string }
-	expected := &payload{Value: "result"}
+		resp, err := interceptor(next)(context.Background(), connect.NewRequest(&struct{}{}))
 
-	next := connect.UnaryFunc(func(_ context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
-		return connect.NewResponse(expected), nil
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
 	})
-
-	req := connect.NewRequest(&struct{}{})
-	resp, err := interceptor(next)(context.Background(), req)
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp)
 }

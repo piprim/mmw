@@ -10,12 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestApplicationPurityValidator_Pass(t *testing.T) {
-	dir := t.TempDir()
-	appDir := filepath.Join(dir, "modules", "mymod", "internal", "application")
-	require.NoError(t, os.MkdirAll(appDir, 0755))
+func TestApplicationPurityValidator(t *testing.T) {
+	t.Run("passes for clean application package with no external imports", func(t *testing.T) {
+		dir := t.TempDir()
+		appDir := filepath.Join(dir, "modules", "mymod", "internal", "application")
+		require.NoError(t, os.MkdirAll(appDir, 0755))
 
-	require.NoError(t, os.WriteFile(filepath.Join(appDir, "service.go"), []byte(`
+		require.NoError(t, os.WriteFile(filepath.Join(appDir, "service.go"), []byte(`
 package application
 
 import "context"
@@ -25,16 +26,16 @@ type Service interface {
 }
 `), 0600))
 
-	v := &custom.ApplicationPurityValidator{ModulesDir: filepath.Join(dir, "modules")}
-	assert.NoError(t, v.Check())
-}
+		v := &custom.ApplicationPurityValidator{ModulesDir: filepath.Join(dir, "modules")}
+		assert.NoError(t, v.Check())
+	})
 
-func TestApplicationPurityValidator_Fail_ContractsImport(t *testing.T) {
-	dir := t.TempDir()
-	appDir := filepath.Join(dir, "modules", "mymod", "internal", "application")
-	require.NoError(t, os.MkdirAll(appDir, 0755))
+	t.Run("fails when application layer imports contracts package", func(t *testing.T) {
+		dir := t.TempDir()
+		appDir := filepath.Join(dir, "modules", "mymod", "internal", "application")
+		require.NoError(t, os.MkdirAll(appDir, 0755))
 
-	require.NoError(t, os.WriteFile(filepath.Join(appDir, "errors.go"), []byte(`
+		require.NoError(t, os.WriteFile(filepath.Join(appDir, "errors.go"), []byte(`
 package application
 
 import deftodo "github.com/pivaldi/mmw-contracts/go/application/todo"
@@ -42,8 +43,9 @@ import deftodo "github.com/pivaldi/mmw-contracts/go/application/todo"
 type ErrorCode = deftodo.ErrorCode
 `), 0600))
 
-	v := &custom.ApplicationPurityValidator{ModulesDir: filepath.Join(dir, "modules")}
-	err := v.Check()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "mmw-contracts")
+		v := &custom.ApplicationPurityValidator{ModulesDir: filepath.Join(dir, "modules")}
+		err := v.Check()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "mmw-contracts")
+	})
 }

@@ -23,51 +23,55 @@ type captureBus struct {
 func (c *captureBus) Publish(_ context.Context, topic string, payload []byte) error {
 	c.topic = topic
 	c.payload = payload
+
 	return nil
 }
 
-func TestPublish_MarshalAndForward(t *testing.T) {
-	bus := &captureBus{}
-	event := &wrapperspb.StringValue{Value: "hello"}
+func TestPublish(t *testing.T) {
+	t.Run("marshals proto and forwards to bus", func(t *testing.T) {
+		bus := &captureBus{}
+		event := &wrapperspb.StringValue{Value: "hello"}
 
-	err := pfevents.Publish(context.Background(), bus, "test.topic", event)
-	require.NoError(t, err)
+		err := pfevents.Publish(context.Background(), bus, "test.topic", event)
+		require.NoError(t, err)
 
-	assert.Equal(t, "test.topic", bus.topic)
+		assert.Equal(t, "test.topic", bus.topic)
 
-	var decoded wrapperspb.StringValue
-	require.NoError(t, protojson.Unmarshal(bus.payload, &decoded))
-	assert.Equal(t, "hello", decoded.Value)
+		var decoded wrapperspb.StringValue
+		require.NoError(t, protojson.Unmarshal(bus.payload, &decoded))
+		assert.Equal(t, "hello", decoded.Value)
+	})
 }
 
-func TestHandle_UnmarshalAndDelegate(t *testing.T) {
-	var received *wrapperspb.StringValue
+func TestHandle(t *testing.T) {
+	t.Run("unmarshals payload and delegates to handler", func(t *testing.T) {
+		var received *wrapperspb.StringValue
 
-	handler := pfevents.Handle(func(ctx context.Context, e *wrapperspb.StringValue) error {
-		received = e
-		return nil
+		handler := pfevents.Handle(func(ctx context.Context, e *wrapperspb.StringValue) error {
+			received = e
+
+			return nil
+		})
+
+		payload, err := protojson.Marshal(&wrapperspb.StringValue{Value: "world"})
+		require.NoError(t, err)
+
+		msg := message.NewMessage(watermill.NewUUID(), payload)
+		msg.SetContext(context.Background())
+
+		require.NoError(t, handler(msg))
+		require.NotNil(t, received)
+		assert.Equal(t, "world", received.Value)
 	})
 
-	payload, err := protojson.Marshal(&wrapperspb.StringValue{Value: "world"})
-	require.NoError(t, err)
+	t.Run("returns error on unmarshal failure", func(t *testing.T) {
+		handler := pfevents.Handle(func(_ context.Context, _ *wrapperspb.StringValue) error {
+			return nil
+		})
 
-	msg := message.NewMessage(watermill.NewUUID(), payload)
-	msg.SetContext(context.Background())
+		msg := message.NewMessage(watermill.NewUUID(), []byte("not-valid-json"))
+		msg.SetContext(context.Background())
 
-	err = handler(msg)
-	require.NoError(t, err)
-	require.NotNil(t, received)
-	assert.Equal(t, "world", received.Value)
-}
-
-func TestHandle_UnmarshalError(t *testing.T) {
-	handler := pfevents.Handle(func(_ context.Context, _ *wrapperspb.StringValue) error {
-		return nil
+		assert.ErrorContains(t, handler(msg), "unmarshal")
 	})
-
-	msg := message.NewMessage(watermill.NewUUID(), []byte("not-valid-json"))
-	msg.SetContext(context.Background())
-
-	err := handler(msg)
-	assert.ErrorContains(t, err, "unmarshal")
 }

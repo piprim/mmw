@@ -6,53 +6,44 @@ import (
 	"testing"
 )
 
-func TestRunServiceCheck_Success(t *testing.T) {
-	// Create temp directory for mock service
-	tmpDir := t.TempDir()
+func TestRunServiceCheck(t *testing.T) {
+	t.Run("returns exit code 0 and service name on success", func(t *testing.T) {
+		tmpDir := t.TempDir()
 
-	// Create a mise.toml with a simple passing arch:check task
-	miseToml := `[tasks."arch:check"]
+		miseToml := `[tasks."arch:check"]
 run = "exit 0"
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "mise.toml"), []byte(miseToml), 0o644)
-	if err != nil {
-		t.Fatalf("Failed to create mise.toml: %v", err)
-	}
+		if err := os.WriteFile(filepath.Join(tmpDir, "mise.toml"), []byte(miseToml), 0o644); err != nil {
+			t.Fatalf("failed to create mise.toml: %v", err)
+		}
 
-	// This test validates that RunServiceCheck executes the command and returns success
-	result := RunServiceCheck(tmpDir, "test-service")
+		result := RunServiceCheck(tmpDir, "test-service")
 
-	if result.ExitCode != 0 {
-		t.Errorf("Expected exit code 0, got %d. Output: %s", result.ExitCode, result.Output)
-	}
+		if result.ExitCode != 0 {
+			t.Errorf("expected exit code 0, got %d. Output: %s", result.ExitCode, result.Output)
+		}
+		if result.ServiceName != "test-service" {
+			t.Errorf("expected service name 'test-service', got '%s'", result.ServiceName)
+		}
+	})
 
-	if result.ServiceName != "test-service" {
-		t.Errorf("Expected service name 'test-service', got '%s'", result.ServiceName)
-	}
-}
+	t.Run("captures non-zero exit code on failure", func(t *testing.T) {
+		tmpDir := t.TempDir()
 
-func TestRunServiceCheck_Failure(t *testing.T) {
-	// Create temp directory for mock service
-	tmpDir := t.TempDir()
-
-	// Create a mise.toml with a failing arch:check task
-	miseToml := `[tasks."arch:check"]
+		miseToml := `[tasks."arch:check"]
 run = "exit 42"
 `
-	err := os.WriteFile(filepath.Join(tmpDir, "mise.toml"), []byte(miseToml), 0o644)
-	if err != nil {
-		t.Fatalf("Failed to create mise.toml: %v", err)
-	}
+		if err := os.WriteFile(filepath.Join(tmpDir, "mise.toml"), []byte(miseToml), 0o644); err != nil {
+			t.Fatalf("failed to create mise.toml: %v", err)
+		}
 
-	// This test validates that RunServiceCheck captures non-zero exit codes
-	// when mise run arch:check fails
-	result := RunServiceCheck(tmpDir, "failing-service")
+		result := RunServiceCheck(tmpDir, "failing-service")
 
-	if result.ServiceName != "failing-service" {
-		t.Errorf("Expected service name 'failing-service', got '%s'", result.ServiceName)
-	}
-
-	if result.ExitCode != 42 {
-		t.Errorf("Expected exit code 42, got %d. Output: %s", result.ExitCode, result.Output)
-	}
+		if result.ServiceName != "failing-service" {
+			t.Errorf("expected service name 'failing-service', got '%s'", result.ServiceName)
+		}
+		if result.ExitCode != 42 {
+			t.Errorf("expected exit code 42, got %d. Output: %s", result.ExitCode, result.Output)
+		}
+	})
 }

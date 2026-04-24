@@ -108,17 +108,19 @@ func TestEnvironment_UnmarshalText(t *testing.T) {
 }
 
 func TestEnvironment_AppendText(t *testing.T) {
-	env := EnvironmentTesting
-	b, err := env.AppendText([]byte("prefix-"))
-	require.NoError(t, err)
-	assert.Equal(t, []byte("prefix-testing"), b)
-}
+	t.Run("appends environment name to prefix", func(t *testing.T) {
+		env := EnvironmentTesting
+		b, err := env.AppendText([]byte("prefix-"))
+		require.NoError(t, err)
+		assert.Equal(t, []byte("prefix-testing"), b)
+	})
 
-func TestEnvironment_AppendText_EmptyPrefix(t *testing.T) {
-	env := EnvironmentDevelopment
-	b, err := env.AppendText(nil)
-	require.NoError(t, err)
-	assert.Equal(t, []byte("development"), b)
+	t.Run("returns environment name when prefix is nil", func(t *testing.T) {
+		env := EnvironmentDevelopment
+		b, err := env.AppendText(nil)
+		require.NoError(t, err)
+		assert.Equal(t, []byte("development"), b)
+	})
 }
 
 func TestEnvironment_IsDev(t *testing.T) {

@@ -9,27 +9,28 @@ import (
 )
 
 func TestIOTxtHandler(t *testing.T) {
-	var buf bytes.Buffer
-	handler := IOTxtHandler(&buf, slog.LevelInfo, nil, false)
-	logger := slog.New(handler)
+	t.Run("writes message with level and key-value attrs", func(t *testing.T) {
+		var buf bytes.Buffer
+		handler := IOTxtHandler(&buf, slog.LevelInfo, nil, false)
+		logger := slog.New(handler)
 
-	logger.Info("test message", "key", "value")
+		logger.Info("test message", "key", "value")
 
-	output := buf.String()
-	assert.Contains(t, output, "INF")
-	assert.Contains(t, output, "test message")
-	assert.Contains(t, output, "key=value")
+		output := buf.String()
+		assert.Contains(t, output, "INF")
+		assert.Contains(t, output, "test message")
+		assert.Contains(t, output, "key=value")
+	})
 }
 
 func TestStdoutTxtHandler(t *testing.T) {
-	// Cannot easily capture stdout in parallel tests without redirection hacks.
-	// We just ensure it doesn't panic and returns a handler.
-	handler := StdoutTxtHandler(slog.LevelInfo, nil)
-	assert.NotNil(t, handler)
+	t.Run("returns non-nil handler", func(t *testing.T) {
+		assert.NotNil(t, StdoutTxtHandler(slog.LevelInfo, nil))
+	})
 }
 
 func TestStderrTxtHandler(t *testing.T) {
-	// Same as above.
-	handler := StderrTxtHandler(slog.LevelInfo, nil)
-	assert.NotNil(t, handler)
+	t.Run("returns non-nil handler", func(t *testing.T) {
+		assert.NotNil(t, StderrTxtHandler(slog.LevelInfo, nil))
+	})
 }
