@@ -21,11 +21,21 @@ func UpdateGoWork(repoRoot, name string) error {
 		return nil // already present, idempotent
 	}
 
-	// Insert before the closing ")" of the use block
-	updated := strings.Replace(string(content), "\n)", "\n"+newEntry+"\n)", 1)
-	if updated == string(content) {
+	// Locate the use block, then find its closing ")" to insert before it.
+	// Searching from the "use (" position avoids accidentally matching a
+	// closing ")" in an earlier replace () block.
+	useIdx := strings.Index(string(content), "use (")
+	if useIdx == -1 {
 		return errors.New("could not find use block in go.work")
 	}
+
+	closeIdx := strings.Index(string(content)[useIdx:], "\n)")
+	if closeIdx == -1 {
+		return errors.New("malformed use block in go.work: missing closing )")
+	}
+
+	pos := useIdx + closeIdx
+	updated := string(content)[:pos] + "\n" + newEntry + string(content)[pos:]
 
 	//nolint:gosec // G703: Path traversal is safe here
 	if err := os.WriteFile(goWorkPath, []byte(updated), 0600); err != nil {

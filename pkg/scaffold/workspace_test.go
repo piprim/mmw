@@ -33,6 +33,32 @@ use (
 	assert.Contains(t, string(content), "./modules/todo")
 }
 
+func TestUpdateGoWork_WithReplaceBlock(t *testing.T) {
+	dir := t.TempDir()
+	// replace () appears before use () — the old strings.Replace(…, 1) would
+	// have inserted into the replace block instead of the use block.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.work"), []byte(`go 1.26.1
+
+replace (
+	github.com/foo/bar => ./local-bar
+)
+
+use (
+	.
+	./modules/todo
+)
+`), 0600))
+
+	require.NoError(t, scaffold.UpdateGoWork(dir, "payment"))
+
+	content, err := os.ReadFile(filepath.Join(dir, "go.work"))
+	require.NoError(t, err)
+
+	assert.Contains(t, string(content), "./modules/payment")
+	// replace block must be untouched
+	assert.Contains(t, string(content), "github.com/foo/bar => ./local-bar")
+}
+
 func TestUpdateGoWork_Idempotent(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.work"), []byte(`go 1.26.1
