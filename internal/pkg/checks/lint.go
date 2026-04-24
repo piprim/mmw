@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 )
 
 type lintChecker struct {
@@ -37,14 +38,21 @@ func (*lintChecker) Name() string {
 // Check runs `golangci-lint run <targets...>` and streams its output directly
 // to the configured writers. The result signals violations when golangci-lint
 // exits non-zero; the actual diagnostic text is already in out/errOut.
+//
+// targets may be file paths (e.g. from a pre-commit file selection) or package
+// patterns (e.g. "./..."). When file paths are given, package directories are
+// derived from them automatically; if none of the files are Go files the check
+// is skipped. When targets is empty it defaults to "./...".
 func (c *lintChecker) Check(ctx context.Context, targets []string) (Result, error) {
 	if _, err := exec.LookPath("golangci-lint"); err != nil {
 		return Result{}, fmt.Errorf("checks: golangci-lint not found on PATH: %w", err)
 	}
 
-	runTargets := targets
-	if len(runTargets) == 0 {
-		runTargets = []string{"./..."}
+	runTargets, skip := resolveTargets(targets)
+	if skip {
+		fmt.Fprintln(c.out, "[lint] skipped (no Go files in selection)")
+
+		return Result{CheckerName: c.Name()}, nil
 	}
 
 	result := Result{
@@ -69,4 +77,35 @@ func (c *lintChecker) Check(ctx context.Context, targets []string) (Result, erro
 	}
 
 	return result, nil
+}
+
+// resolveTargets returns the package patterns to pass to golangci-lint.
+//
+// If any target is a .go file path, packages are derived via PackageDirsFromFiles;
+// skip is true when the derivation yields nothing (no Go files in the selection).
+// Otherwise targets are used as-is, defaulting to ./... when empty.
+func resolveTargets(targets []string) (pkgs []string, skip bool) {
+	if hasGoFileTargets(targets) {
+		pkgs = PackageDirsFromFiles(targets)
+
+		return pkgs, len(pkgs) == 0
+	}
+
+	if len(targets) == 0 {
+		return []string{"./..."}, false
+	}
+
+	return targets, false
+}
+
+// hasGoFileTargets reports whether any entry in targets has a .go extension,
+// indicating that targets is a list of file paths rather than package patterns.
+func hasGoFileTargets(targets []string) bool {
+	for _, t := range targets {
+		if filepath.Ext(t) == goExt {
+			return true
+		}
+	}
+
+	return false
 }

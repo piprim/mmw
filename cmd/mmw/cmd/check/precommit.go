@@ -57,23 +57,20 @@ func runPreCommit(cmd *cobra.Command, modified, failFast bool) error {
 		return nil
 	}
 
-	// Build the ordered checker list.  Packages for the lint checker are
-	// derived from the .go files in the selected file set.
-	goPackages := checks.PackageDirsFromFiles(files)
-
 	allCheckers := []checks.Checker{
 		checks.NewFilesChecker(),
 		checks.NewYAMLChecker(),
 		checks.NewTOMLChecker(),
 		checks.NewFormatChecker(),
+		checks.NewLintChecker(cmd.OutOrStdout(), cmd.ErrOrStderr()),
 	}
-
-	var hasViolations bool
 
 	results, err := checks.RunPreCommit(ctx, allCheckers, files, failFast)
 	if err != nil {
 		return fmt.Errorf("run pre-commit: %w", err)
 	}
+
+	var hasViolations bool
 
 	for _, result := range results {
 		if result.HasViolations() {
@@ -87,23 +84,6 @@ func runPreCommit(cmd *cobra.Command, modified, failFast bool) error {
 			}
 
 			fmt.Fprintf(cmd.OutOrStdout(), "[%s] %s: %s\n", result.CheckerName, loc, v.Message)
-		}
-	}
-
-	// Run lint separately if we have Go files and haven't fail-fasted.
-	// golangci-lint output is streamed directly to stdout — no buffering or parsing.
-	if len(goPackages) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "[lint] skipped (no Go files in selection)")
-	} else if !failFast || !hasViolations {
-		lintResult, err := checks.NewLintChecker(cmd.OutOrStdout(), cmd.ErrOrStderr()).Check(ctx, goPackages)
-		if err != nil {
-			return fmt.Errorf("lint: %w", err)
-		}
-
-		if lintResult.HasViolations() {
-			hasViolations = true
-		} else {
-			fmt.Fprintln(cmd.OutOrStdout(), "[lint] ok")
 		}
 	}
 
