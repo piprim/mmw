@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -12,6 +13,13 @@ import (
 const maxFileSize = 512_000 // 500 KB
 
 const maxLineBufBytes = 1024 * 1024 // 1 MB — maximum line length for bufio.Scanner
+
+func newLargeBufScanner(r io.Reader) *bufio.Scanner {
+	s := bufio.NewScanner(r)
+	s.Buffer(make([]byte, maxLineBufBytes), maxLineBufBytes)
+
+	return s
+}
 
 type filesChecker struct{}
 
@@ -92,8 +100,7 @@ func checkFileContent(path string) ([]Violation, error) {
 	}
 
 	lineNum := 0
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, maxLineBufBytes), maxLineBufBytes)
+	scanner := newLargeBufScanner(bytes.NewReader(data))
 
 	for scanner.Scan() {
 		lineNum++
@@ -144,8 +151,7 @@ func fixFileContent(path string) error {
 
 	var buf bytes.Buffer
 
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, maxLineBufBytes), maxLineBufBytes)
+	scanner := newLargeBufScanner(bytes.NewReader(data))
 
 	for scanner.Scan() {
 		line := scanner.Text()
