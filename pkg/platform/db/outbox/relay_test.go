@@ -48,7 +48,7 @@ func TestNewOutboxRelay(t *testing.T) {
 	mockBus := &mockSystemEventBus{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	relay, err := NewEnventsRelay(nil, mockBus, logger, tablename)
+	relay, err := NewEventsRelay(nil, mockBus, logger, tablename)
 	require.Nil(t, err, "should not return an error")
 
 	assert.NotNil(t, relay)
@@ -62,7 +62,7 @@ func TestNewOutboxRelayMustFailed(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	tableNames := []string{"", "\"", ".", "aze$rty", "a.b.c", "acc'ent"}
 	for i := range tableNames {
-		relay, err := NewEnventsRelay(nil, mockBus, logger, tableNames[i])
+		relay, err := NewEventsRelay(nil, mockBus, logger, tableNames[i])
 		assert.Errorf(t, err, `table name "%s" should be rejected`, tableNames[i])
 		assert.Nil(t, relay, "relay should be nil when an error occurs")
 	}
@@ -73,7 +73,7 @@ func TestNewOutboxRelayMustNotFailed(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	tableNames := []string{"a", "a.b", "aa", "aa.bb", "a2", "a2b", "a2b.b3c", "ab_c", "ab_c.d_e"}
 	for i := range tableNames {
-		relay, err := NewEnventsRelay(nil, mockBus, logger, tableNames[i])
+		relay, err := NewEventsRelay(nil, mockBus, logger, tableNames[i])
 		assert.Nil(t, err, `table name "%s" should accepted`, tableNames[i])
 		assert.NotNil(t, relay, "relay should be not nil when no error occurs")
 	}
@@ -83,7 +83,7 @@ func TestOutboxRelay_Start_ContextCancellation(t *testing.T) {
 	mockBus := &mockSystemEventBus{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	relay, err := NewEnventsRelay(nil, mockBus, logger, tablename)
+	relay, err := NewEventsRelay(nil, mockBus, logger, tablename)
 	require.Nil(t, err, "should not return an error")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -132,7 +132,7 @@ func TestOutboxRelay_Start_ProcessesPeriodicBatches(t *testing.T) {
 	// Setup relay with fast interval for testing
 	mockBus := &mockSystemEventBus{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	relay, err := NewEnventsRelay(pool, mockBus, logger, tablename)
+	relay, err := NewEventsRelay(pool, mockBus, logger, tablename)
 	require.Nil(t, err, "should not return an error")
 
 	relay.interval = 100 * time.Millisecond
@@ -192,7 +192,7 @@ func TestOutboxRelay_Interval_Configuration(t *testing.T) {
 	mockBus := &mockSystemEventBus{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	relay, err := NewEnventsRelay(nil, mockBus, logger, tablename)
+	relay, err := NewEventsRelay(nil, mockBus, logger, tablename)
 	require.Nil(t, err, "should not return an error")
 
 	// Default interval should be 2 seconds
@@ -337,7 +337,7 @@ func TestOutboxRelay_LifecycleManagement(t *testing.T) {
 	t.Run("graceful shutdown on context cancellation", func(t *testing.T) {
 		mockBus := &mockSystemEventBus{}
 		logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-		relay, _ := NewEnventsRelay(nil, mockBus, logger, tablename)
+		relay, _ := NewEventsRelay(nil, mockBus, logger, tablename)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
@@ -354,7 +354,7 @@ func TestOutboxRelay_LifecycleManagement(t *testing.T) {
 	t.Run("ticker stops on shutdown", func(t *testing.T) {
 		mockBus := &mockSystemEventBus{}
 		logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-		relay, _ := NewEnventsRelay(nil, mockBus, logger, tablename)
+		relay, _ := NewEventsRelay(nil, mockBus, logger, tablename)
 		// Use very long interval to prevent ticker from firing during test
 		relay.interval = 10 * time.Second
 
@@ -403,7 +403,7 @@ func TestOutboxRelay_ConfigurableInterval(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockBus := &mockSystemEventBus{}
 			logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-			relay, _ := NewEnventsRelay(nil, mockBus, logger, tablename)
+			relay, _ := NewEventsRelay(nil, mockBus, logger, tablename)
 
 			relay.interval = tt.interval
 			assert.Equal(t, tt.interval, relay.interval)

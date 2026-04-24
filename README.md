@@ -55,7 +55,7 @@ func New(infra Infrastructure) (*Module, error) {
 
 	return &Module{
 		// Outbox relay: polls todo.event every 2 s and forwards rows to the SystemEventBus.
-		relay:   pfoutbox.NewEnventsRelay(infra.DBPool, infra.EventBus, infra.Logger, relayTableName),
+		relay:   pfoutbox.NewEventsRelay(infra.DBPool, infra.EventBus, infra.Logger, relayTableName),
 		server:  httpServer,
 		router:  router,
 		logger:  infra.Logger,
@@ -374,7 +374,7 @@ The relay is the read side. It runs as a `core.Module` goroutine, ticking every 
 3. Marks successfully published rows with `published_at = NOW()` and commits.
 
 ```go
-relay := outbox.NewEnventsRelay(pool, eventBus, logger, "todo.event")
+relay := outbox.NewEventsRelay(pool, eventBus, logger, "todo.event")
 // relay implements core.Module — pass it to platform.New alongside the HTTP server
 ```
 

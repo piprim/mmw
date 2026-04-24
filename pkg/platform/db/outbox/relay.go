@@ -24,7 +24,7 @@ type EventsRelay struct {
 	tableName string                  // The specific SQL table to poll (e.g., "todo_events").
 }
 
-func NewEnventsRelay(
+func NewEventsRelay(
 	pool *pgxpool.Pool,
 	bus pfevents.SystemEventBus,
 	logger *slog.Logger,

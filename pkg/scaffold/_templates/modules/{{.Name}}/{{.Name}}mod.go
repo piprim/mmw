@@ -53,7 +53,7 @@ func New(infra Infrastructure) (*Module, error) {
 	dispatcher := events.NewPostgresOutboxDispatcher(uow)
 	svc := application.New{{.Name | pascal}}ApplicationService(repo, uow, dispatcher)
 
-	relay := pfoutbox.NewEnventsRelay(infra.DBPool, infra.EventBus, infra.Logger, relayTableName)
+	relay := pfoutbox.NewEventsRelay(infra.DBPool, infra.EventBus, infra.Logger, relayTableName)
 	server := pfserver.NewHTTPServer(pfserver.HTTPServerInfra{
 		Config:  cfg.Server,
 		Logger:  infra.Logger,
