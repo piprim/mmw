@@ -781,6 +781,10 @@ mmw check yaml [files...]                 Check YAML syntax with yamllint
 mmw check lint [--workspace] [packages…]  Run golangci-lint
 mmw check pre-commit [--modified]         Run all checks as a pre-commit gate
 mmw test coverage [flags] [packages]      Print a test coverage table
+mmw workspace tidy                        go mod tidy every module then go work sync
+mmw workspace status                      Verify module checksums and sync workspace
+mmw workspace sync <module-dir>           Pin a module's HEAD commit across dependents
+mmw workspace sync --all                  Sync every workspace module in order
 mmw version                               Print version, commit, and build time
 ```
 
@@ -879,6 +883,44 @@ tool (
     github.com/piprim/mmw/cmd/mmw
 )
 ```
+
+### `mmw workspace tidy`
+
+Runs `go mod tidy` in every module declared in `go.work` (in declaration order), then runs `go work sync` at the workspace root.
+
+Use after adding or removing dependencies in any module to keep all `go.sum` files consistent:
+
+```bash
+mmw workspace tidy
+```
+
+### `mmw workspace status`
+
+Runs `go mod verify` in every workspace module to check that the module cache matches the expected checksums. Prints `✓ <module>` or `✗ <module>` per module, then runs `go work sync` at the workspace root. Exits non-zero if any module fails verification.
+
+```bash
+mmw workspace status
+```
+
+### `mmw workspace sync [--all] [module-dir]`
+
+Pins a module's current HEAD commit across all other workspace modules that depend on it.
+
+For a single module:
+
+1. Runs `git rev-parse HEAD` in the module directory to obtain the commit hash.
+2. Reads the Go module path from the module's `go.mod`.
+3. For every other module in `go.work` whose `go.mod` references that module path, runs `go get <module>@<commit>` followed by `go mod tidy`.
+4. Runs `go work sync` at the workspace root.
+
+```bash
+mmw workspace sync modules/auth          # sync auth's HEAD into its dependents
+mmw workspace sync --all                 # sync every module in declaration order
+```
+
+| Flag | Description |
+|---|---|
+| `--all` | Sync every module declared in `go.work` in declaration order; the positional argument is ignored |
 
 ### `mmw test coverage`
 

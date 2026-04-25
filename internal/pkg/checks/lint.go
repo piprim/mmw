@@ -83,6 +83,8 @@ func (c *lintChecker) Check(ctx context.Context, targets []string) (Result, erro
 //
 // If any target is a .go file path, packages are derived via PackageDirsFromFiles;
 // skip is true when the derivation yields nothing (no Go files in the selection).
+// If targets are non-Go file paths (e.g. go.mod, go.sum from a pre-commit selection),
+// lint is skipped — passing them to golangci-lint would cause a "does not contain package" error.
 // Otherwise targets are used as-is, defaulting to ./... when empty.
 func resolveLintTargets(targets []string) (pkgs []string, skip bool) {
 	if hasGoFileTargets(targets) {
@@ -95,7 +97,23 @@ func resolveLintTargets(targets []string) (pkgs []string, skip bool) {
 		return []string{"./..."}, false
 	}
 
+	if hasFilePathTargets(targets) {
+		return nil, true
+	}
+
 	return targets, false
+}
+
+// hasFilePathTargets reports whether any entry in targets looks like a file path
+// (has a file extension). Used to distinguish a pre-commit file list from package patterns.
+func hasFilePathTargets(targets []string) bool {
+	for _, t := range targets {
+		if filepath.Ext(t) != "" {
+			return true
+		}
+	}
+
+	return false
 }
 
 // hasGoFileTargets reports whether any entry in targets has a .go extension,
