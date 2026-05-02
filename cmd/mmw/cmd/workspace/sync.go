@@ -3,6 +3,7 @@ package workspace
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -51,18 +52,18 @@ The positional argument is ignored when --all is set.`,
 					}
 				}
 
-				return runCmd(ctx, out, errOut, root, "go", "work", "sync")
+				return runGoCmd(ctx, ioStreams{out, errOut}, root, "work", "sync")
 			}
 
 			if len(args) == 0 {
-				return fmt.Errorf("workspace sync: module-dir argument is required (or use --all)")
+				return errors.New("workspace sync: module-dir argument is required (or use --all)")
 			}
 
 			if err := syncModule(ctx, out, errOut, root, args[0]); err != nil {
 				return err
 			}
 
-			return runCmd(ctx, out, errOut, root, "go", "work", "sync")
+			return runGoCmd(ctx, ioStreams{out, errOut}, root, "work", "sync")
 		},
 	}
 
@@ -71,10 +72,12 @@ The positional argument is ignored when --all is set.`,
 	return cmd
 }
 
+const shortHashLen = 8
+
 func syncModule(ctx context.Context, out, errOut io.Writer, root, modPath string) error {
 	absModDir := filepath.Join(root, modPath)
 
-	commit, err := gitCommit(absModDir)
+	commit, err := gitCommit(ctx, absModDir)
 	if err != nil {
 		return err
 	}
@@ -85,8 +88,8 @@ func syncModule(ctx context.Context, out, errOut io.Writer, root, modPath string
 	}
 
 	shortCommit := commit
-	if len(commit) > 8 {
-		shortCommit = commit[:8]
+	if len(commit) > shortHashLen {
+		shortCommit = commit[:shortHashLen]
 	}
 
 	fmt.Fprintf(out, "── sync %s @ %s ──\n", moduleName, shortCommit)
@@ -115,11 +118,11 @@ func syncModule(ctx context.Context, out, errOut io.Writer, root, modPath string
 
 		fmt.Fprintf(out, "  → updating %s\n", mod)
 
-		if err := runCmd(ctx, out, errOut, depDir, "go", "get", moduleRef); err != nil {
+		if err := runGoCmd(ctx, ioStreams{out, errOut}, depDir, "get", moduleRef); err != nil {
 			return err
 		}
 
-		if err := runCmd(ctx, out, errOut, depDir, "go", "mod", "tidy"); err != nil {
+		if err := runGoCmd(ctx, ioStreams{out, errOut}, depDir, "mod", "tidy"); err != nil {
 			return err
 		}
 	}
@@ -127,8 +130,8 @@ func syncModule(ctx context.Context, out, errOut io.Writer, root, modPath string
 	return nil
 }
 
-func gitCommit(dir string) (string, error) {
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "HEAD")
+func gitCommit(ctx context.Context, dir string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "HEAD")
 
 	out, err := cmd.Output()
 	if err != nil {

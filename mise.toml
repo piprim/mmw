@@ -1,10 +1,11 @@
 # mise configuration for ogl library
 [settings]
 experimental = true
-# task_output = "quiet"
 
-[tools.go]
-version = "latest"
+[tools]
+go = "1.26.1"
+yamllint = "latest"
+golangci-lint = "latest"
 
 [shell_alias]
 mr = "mise run"

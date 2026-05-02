@@ -64,14 +64,19 @@ func workModules(root string) ([]string, error) {
 	return modules, nil
 }
 
-func runCmd(ctx context.Context, out, errOut io.Writer, dir, name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...)
+type ioStreams struct {
+	out    io.Writer
+	errOut io.Writer
+}
+
+func runGoCmd(ctx context.Context, w ioStreams, dir string, args ...string) error {
+	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = dir
-	cmd.Stdout = out
-	cmd.Stderr = errOut
+	cmd.Stdout = w.out
+	cmd.Stderr = w.errOut
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("run %s: %w", name, err)
+		return fmt.Errorf("run go: %w", err)
 	}
 
 	return nil

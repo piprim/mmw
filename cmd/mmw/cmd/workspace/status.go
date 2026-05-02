@@ -39,7 +39,7 @@ func runStatus(ctx context.Context, cmd *cobra.Command) error {
 
 	for _, mod := range modules {
 		modDir := filepath.Join(root, mod)
-		verify := exec.CommandContext(ctx, "go", "mod", "verify") //nolint:gosec
+		verify := exec.CommandContext(ctx, "go", "mod", "verify")
 		verify.Dir = modDir
 		verify.Stdout = out
 		verify.Stderr = errOut
@@ -54,7 +54,7 @@ func runStatus(ctx context.Context, cmd *cobra.Command) error {
 		fmt.Fprintf(out, "  ✓ %s\n", mod)
 	}
 
-	if err := runCmd(ctx, out, errOut, root, "go", "work", "sync"); err != nil {
+	if err := runGoCmd(ctx, ioStreams{out, errOut}, root, "work", "sync"); err != nil {
 		return fmt.Errorf("go work sync: %w", err)
 	}
 

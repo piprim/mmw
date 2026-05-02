@@ -28,12 +28,12 @@ func NewTidyCmd() *cobra.Command {
 			for _, mod := range modules {
 				fmt.Fprintf(out, "── tidy %s ──\n", mod)
 
-				if err := runCmd(ctx, out, errOut, filepath.Join(root, mod), "go", "mod", "tidy"); err != nil {
+				if err := runGoCmd(ctx, ioStreams{out, errOut}, filepath.Join(root, mod), "mod", "tidy"); err != nil {
 					return err
 				}
 			}
 
-			return runCmd(ctx, out, errOut, root, "go", "work", "sync")
+			return runGoCmd(ctx, ioStreams{out, errOut}, root, "work", "sync")
 		},
 	}
 }
