@@ -10,7 +10,7 @@ import (
 )
 
 func TestEmbeddedFS(t *testing.T) {
-	t.Run("top-level entries include modules, contracts, and template.toml", func(t *testing.T) {
+	t.Run("top-level entries include modules, contracts, and goplt.toml", func(t *testing.T) {
 		fsys := scaffold.EmbeddedFS()
 
 		entries, err := fs.ReadDir(fsys, ".")
@@ -23,12 +23,12 @@ func TestEmbeddedFS(t *testing.T) {
 
 		assert.Contains(t, names, "modules")
 		assert.Contains(t, names, "contracts")
-		assert.Contains(t, names, "template.toml")
+		assert.Contains(t, names, "goplt.toml")
 	})
 
-	t.Run("template.toml is present at FS root", func(t *testing.T) {
+	t.Run("goplt.toml is present at FS root", func(t *testing.T) {
 		fsys := scaffold.EmbeddedFS()
-		_, err := fs.Stat(fsys, "template.toml")
+		_, err := fs.Stat(fsys, "goplt.toml")
 		assert.NoError(t, err)
 	})
 }

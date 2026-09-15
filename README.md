@@ -710,7 +710,7 @@ Template functions available in every file via `goplt.DefaultFuncMap()`:
 | `camel` | `{{.Name \| camel}}` → `myPayment` |
 | `kebab` | `{{.Name \| kebab}}` → `my-payment` |
 
-**`template.toml` format:**
+**`goplt.toml` format:**
 
 Variables can be declared as plain values (short form) or as a sub-table with an optional `description` shown in the TUI:
 

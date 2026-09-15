@@ -169,7 +169,7 @@ func TestGenerateContract(t *testing.T) {
 func TestGenerate_EmptyName(t *testing.T) {
 	t.Run("renders empty name without error (documents behaviour)", func(t *testing.T) {
 		fsys := fstest.MapFS{
-			"template.toml": &fstest.MapFile{Data: []byte(`
+			"goplt.toml": &fstest.MapFile{Data: []byte(`
 description = "The description"
 [variables]
 kind = "input"
