@@ -4,10 +4,7 @@
 // drives all checks without knowing their concrete types.
 package checks
 
-import (
-	"context"
-	"strings"
-)
+import "context"
 
 // Violation describes a single check issue at a specific location.
 type Violation struct {
@@ -48,17 +45,6 @@ type Checker interface {
 	// Check validates targets and returns any violations found.
 	// When targets is empty, implementations fall back to a default set (e.g. all tracked files).
 	Check(ctx context.Context, targets []string) (Result, error)
-}
-
-// extractFileFromLine extracts the file path from a tool output line.
-// Expected format: "path/file.go:10:5: message"
-func extractFileFromLine(line string) string {
-	before, _, found := strings.Cut(line, ":")
-	if !found {
-		return ""
-	}
-
-	return strings.TrimSpace(before)
 }
 
 // Fixer is optionally implemented by checkers that support --fix.
