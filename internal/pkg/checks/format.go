@@ -42,6 +42,15 @@ func (c *formatChecker) Check(ctx context.Context, targets []string) (Result, er
 			continue
 		}
 
+		generated, err := IsGenerated(path)
+		if err != nil {
+			return Result{}, fmt.Errorf("checks: format: %w", err)
+		}
+
+		if generated {
+			continue
+		}
+
 		formatted, err := isFormatted(path)
 		if err != nil {
 			return Result{}, fmt.Errorf("checks: format: %w", err)
@@ -67,6 +76,15 @@ func (*formatChecker) Fix(ctx context.Context, targets []string) error {
 
 	for _, path := range files {
 		if filepath.Ext(path) != goExt {
+			continue
+		}
+
+		generated, err := IsGenerated(path)
+		if err != nil {
+			return fmt.Errorf("checks: format fix: %w", err)
+		}
+
+		if generated {
 			continue
 		}
 
