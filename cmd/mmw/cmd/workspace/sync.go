@@ -92,7 +92,7 @@ func syncModule(ctx context.Context, out, errOut io.Writer, root, modPath string
 		shortCommit = commit[:shortHashLen]
 	}
 
-	fmt.Fprintf(out, "── sync %s @ %s ──\n", moduleName, shortCommit)
+	_, _ = fmt.Fprintf(out, "── sync %s @ %s ──\n", moduleName, shortCommit)
 
 	modules, err := workModules(root)
 	if err != nil {
@@ -116,7 +116,7 @@ func syncModule(ctx context.Context, out, errOut io.Writer, root, modPath string
 			continue
 		}
 
-		fmt.Fprintf(out, "  → updating %s\n", mod)
+		_, _ = fmt.Fprintf(out, "  → updating %s\n", mod)
 
 		if err := runGoCmd(ctx, ioStreams{out, errOut}, depDir, "get", moduleRef); err != nil {
 			return err

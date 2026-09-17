@@ -58,6 +58,10 @@ func moduleFromGoMod() (string, error) {
 		}
 	}
 
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("scanner error: %w", err)
+	}
+
 	return "", errors.New("module directive not found in go.mod")
 }
 
@@ -153,16 +157,16 @@ func printTable(w io.Writer, rows []row) {
 
 	hline := func(left, mid, right string) {
 		fill := "─"
-		fmt.Fprint(w, left)
-		fmt.Fprint(w, strings.Repeat(fill, w1+2))
-		fmt.Fprint(w, mid)
-		fmt.Fprint(w, strings.Repeat(fill, w2+2))
-		fmt.Fprint(w, mid)
-		fmt.Fprint(w, strings.Repeat(fill, w3+2))
-		fmt.Fprintln(w, right)
+		_, _ = fmt.Fprint(w, left)
+		_, _ = fmt.Fprint(w, strings.Repeat(fill, w1+2))
+		_, _ = fmt.Fprint(w, mid)
+		_, _ = fmt.Fprint(w, strings.Repeat(fill, w2+2))
+		_, _ = fmt.Fprint(w, mid)
+		_, _ = fmt.Fprint(w, strings.Repeat(fill, w3+2))
+		_, _ = fmt.Fprintln(w, right)
 	}
 	dataRow := func(p, c, s string) {
-		fmt.Fprintf(w, "│ %-*s │ %-*s │ %-*s │\n", w1, p, w2, c, w3, s)
+		_, _ = fmt.Fprintf(w, "│ %-*s │ %-*s │ %-*s │\n", w1, p, w2, c, w3, s)
 	}
 
 	hline("┌", "┬", "┐")
@@ -276,8 +280,8 @@ func run(cmd *cobra.Command, opts *options, args []string) error {
 			}
 		}
 		if len(below) > 0 {
-			fmt.Fprintf(cmd.ErrOrStderr(), "\ncoverage below %.0f%% threshold:\n%s\n",
-				opts.min, strings.Join(below, "\n"))
+			_, _ = fmt.Fprintf(
+				cmd.ErrOrStderr(), "\ncoverage below %.0f%% threshold:\n%s\n", opts.min, strings.Join(below, "\n"))
 
 			return fmt.Errorf("%.0f%% minimum coverage threshold not met", opts.min)
 		}

@@ -50,7 +50,7 @@ func (c *lintChecker) Check(ctx context.Context, targets []string) (Result, erro
 
 	runTargets, skip := resolveLintTargets(targets)
 	if skip {
-		fmt.Fprintln(c.out, "[lint] skipped (no Go files in selection)")
+		_, _ = fmt.Fprintln(c.out, "[lint] skipped (no Go files in selection)")
 
 		return Result{CheckerName: c.Name()}, nil
 	}

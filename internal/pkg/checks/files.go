@@ -155,7 +155,7 @@ func fixFileContent(path string) error {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Fprintln(&buf, strings.TrimRight(line, " \t"))
+		_, _ = fmt.Fprintln(&buf, strings.TrimRight(line, " \t"))
 	}
 
 	if err := scanner.Err(); err != nil {

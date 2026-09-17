@@ -45,13 +45,13 @@ func runStatus(ctx context.Context, cmd *cobra.Command) error {
 		verify.Stderr = errOut
 
 		if verifyErr := verify.Run(); verifyErr != nil {
-			fmt.Fprintf(out, "  ✗ %s\n", mod)
+			_, _ = fmt.Fprintf(out, "  ✗ %s\n", mod)
 			failed = append(failed, mod)
 
 			continue
 		}
 
-		fmt.Fprintf(out, "  ✓ %s\n", mod)
+		_, _ = fmt.Fprintf(out, "  ✓ %s\n", mod)
 	}
 
 	if err := runGoCmd(ctx, ioStreams{out, errOut}, root, "work", "sync"); err != nil {

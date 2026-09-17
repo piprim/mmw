@@ -34,7 +34,7 @@ func printResult(cmd *cobra.Command, result checks.Result) error {
 			loc = fmt.Sprintf("%s:%d", v.File, v.Line)
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", loc, v.Message)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", loc, v.Message)
 	}
 
 	if result.HasViolations() {

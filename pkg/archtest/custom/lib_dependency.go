@@ -230,7 +230,7 @@ func checkFileAgainstRootModule(path, rootModuleName string) error {
 			continue
 		}
 		relPath := strings.TrimPrefix(importPath, rootModuleName+"/")
-		firstPart := strings.Split(relPath, "/")[0]
+		firstPart, _, _ := strings.Cut(relPath, "/")
 		if firstPart != "libs" {
 			return fmt.Errorf(
 				"%s: lib imports forbidden package: %s\n\n"+
@@ -248,15 +248,15 @@ func checkFileAgainstRootModule(path, rootModuleName string) error {
 }
 
 func readModuleName(goModPath string) (string, error) {
-	content, err := os.ReadFile(goModPath) //nolint:gosec // path is constructed from trusted workspace internals
+	content, err := os.ReadFile(goModPath)
 	if err != nil {
 		return "", fmt.Errorf("read go.mod %q: %w", goModPath, err)
 	}
 
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "module ") {
-			return strings.TrimPrefix(line, "module "), nil
+		if after, ok := strings.CutPrefix(line, "module "); ok {
+			return after, nil
 		}
 	}
 

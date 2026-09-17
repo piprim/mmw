@@ -52,7 +52,7 @@ func runPreCommit(cmd *cobra.Command, modified, failFast bool) error {
 	}
 
 	if len(files) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "no staged or modified files to check")
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "no staged or modified files to check")
 
 		return nil
 	}
@@ -83,7 +83,7 @@ func runPreCommit(cmd *cobra.Command, modified, failFast bool) error {
 				loc = fmt.Sprintf("%s:%d", v.File, v.Line)
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "[%s] %s: %s\n", result.CheckerName, loc, v.Message)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "[%s] %s: %s\n", result.CheckerName, loc, v.Message)
 		}
 	}
 
@@ -91,7 +91,7 @@ func runPreCommit(cmd *cobra.Command, modified, failFast bool) error {
 		return errors.New("pre-commit: violations found")
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), "pre-commit: all checks passed")
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "pre-commit: all checks passed")
 
 	return nil
 }

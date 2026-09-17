@@ -67,7 +67,7 @@ func lintWorkspace(cmd *cobra.Command) error {
 	var failed []string
 
 	for _, mod := range modules {
-		fmt.Fprintf(out, "\n── lint %s ──\n", mod)
+		_, _ = fmt.Fprintf(out, "\n── lint %s ──\n", mod)
 
 		checker := checks.NewLintCheckerAt(filepath.Join(root, mod), out, errOut)
 
@@ -81,7 +81,7 @@ func lintWorkspace(cmd *cobra.Command) error {
 		}
 	}
 
-	fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out)
 
 	if len(failed) > 0 {
 		return fmt.Errorf("lint violations in: %s", strings.Join(failed, ", "))

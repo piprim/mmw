@@ -26,7 +26,7 @@ func NewTidyCmd() *cobra.Command {
 			}
 
 			for _, mod := range modules {
-				fmt.Fprintf(out, "── tidy %s ──\n", mod)
+				_, _ = fmt.Fprintf(out, "── tidy %s ──\n", mod)
 
 				if err := runGoCmd(ctx, ioStreams{out, errOut}, filepath.Join(root, mod), "mod", "tidy"); err != nil {
 					return err
