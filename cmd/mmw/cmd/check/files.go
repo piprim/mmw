@@ -18,7 +18,8 @@ func NewFilesCmd() *cobra.Command {
 		`Check each file for:
   - trailing whitespace on any line
   - missing newline at end of file
-  - file size > 500 KB (always reported; --fix has no effect)
+  - file size > 500 KB (always reported; --fix has no effect;
+    dependency lockfiles such as package-lock.json and go.sum are exempt)
 
 Defaults to all git-tracked files when no file arguments are given.`,
 		checks.NewFilesChecker,

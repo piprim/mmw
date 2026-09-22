@@ -22,7 +22,7 @@ File selection:
   --modified staged + modified tracked files (suitable for manual runs)
 
 Check order:
-  1. files  — trailing whitespace, EOF newline, size > 500 KB
+  1. files  — trailing whitespace, EOF newline, size > 500 KB (lockfiles exempt)
   2. yaml   — YAML syntax (yamllint)
   3. toml   — TOML syntax (go-toml/v2)
   4. format — gofumpt formatting

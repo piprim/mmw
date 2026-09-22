@@ -7,10 +7,34 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 )
 
 const maxFileSize = 512_000 // 500 KB
+
+// sizeExemptNames lists dependency lockfiles that legitimately outgrow
+// maxFileSize. They are generated, must be committed, and stay diffable, so the
+// size rule is waived for them; the whitespace and EOF-newline rules still apply.
+var sizeExemptNames = []string{
+	"package-lock.json",
+	"npm-shrinkwrap.json",
+	"pnpm-lock.yaml",
+	"yarn.lock",
+	"bun.lock",
+	"go.sum",
+	"Cargo.lock",
+	"Gemfile.lock",
+	"poetry.lock",
+	"uv.lock",
+	"composer.lock",
+}
+
+// isSizeExempt reports whether path is a known lockfile exempt from maxFileSize.
+func isSizeExempt(path string) bool {
+	return slices.Contains(sizeExemptNames, filepath.Base(path))
+}
 
 const maxLineBufBytes = 1024 * 1024 // 1 MB — maximum line length for bufio.Scanner
 
@@ -87,7 +111,7 @@ func checkFileContent(path string) ([]Violation, error) {
 
 	vs := []Violation{}
 
-	if info.Size() > maxFileSize {
+	if info.Size() > maxFileSize && !isSizeExempt(path) {
 		return []Violation{{
 			File:    path,
 			Message: fmt.Sprintf("file size %d bytes exceeds 500 KB limit", info.Size()),
@@ -139,7 +163,7 @@ func fixFileContent(path string) error {
 		return nil
 	}
 
-	if info.Size() > maxFileSize {
+	if info.Size() > maxFileSize && !isSizeExempt(path) {
 		// Size violations cannot be auto-fixed; skip silently.
 		return nil
 	}

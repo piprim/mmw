@@ -3,6 +3,7 @@ package checks_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/piprim/mmw/internal/pkg/checks"
@@ -53,6 +54,22 @@ func TestFilesChecker_Check(t *testing.T) {
 		assert.True(t, result.HasViolations())
 		assert.Contains(t, result.Violations[0].Message, "500 KB")
 	})
+
+	t.Run("size-exempt lockfile above 500 KB has no violations", func(t *testing.T) {
+		path := writeTemp(t, "package-lock.json", oversizedContent("{\n", "}\n"))
+		result, err := checks.NewFilesChecker().Check(t.Context(), []string{path})
+		require.NoError(t, err)
+		assert.False(t, result.HasViolations())
+	})
+
+	t.Run("size-exempt lockfile still reports trailing whitespace", func(t *testing.T) {
+		path := writeTemp(t, "package-lock.json", oversizedContent("{   \n", "}\n"))
+		result, err := checks.NewFilesChecker().Check(t.Context(), []string{path})
+		require.NoError(t, err)
+		assert.Len(t, result.Violations, 1)
+		assert.Equal(t, 1, result.Violations[0].Line)
+		assert.Contains(t, result.Violations[0].Message, "trailing whitespace")
+	})
 }
 
 func TestFilesChecker_Fix(t *testing.T) {
@@ -74,6 +91,18 @@ func TestFilesChecker_Fix(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "no newline\n", string(got))
 	})
+
+	t.Run("fixes an oversized exempt lockfile in-place", func(t *testing.T) {
+		path := writeTemp(t, "package-lock.json", oversizedContent("{   \n", "}"))
+		require.NoError(t, fixer.Fix(t.Context(), []string{path}))
+		got, err := os.ReadFile(path)
+		require.NoError(t, err)
+		// Assert on the edges rather than the whole 500 KB blob so a failure
+		// prints a readable diff.
+		assert.True(t, strings.HasPrefix(string(got), "{\nx"), "trailing whitespace should be stripped")
+		assert.True(t, strings.HasSuffix(string(got), "\n}\n"), "EOF newline should be added")
+		assert.Len(t, got, len(oversizedContent("{\n", "}\n")))
+	})
 }
 
 // writeTemp creates a temporary file with the given content and returns its path.
@@ -84,4 +113,11 @@ func writeTemp(t *testing.T, name, content string) string {
 	require.NoError(t, err)
 
 	return path
+}
+
+// oversizedContent returns head + filler + tail where the filler pushes the
+// total well past the 500 KB limit. The filler is a single line of 'x' bytes
+// so it never contributes whitespace or newline violations of its own.
+func oversizedContent(head, tail string) string {
+	return head + strings.Repeat("x", 513_000) + "\n" + tail
 }
