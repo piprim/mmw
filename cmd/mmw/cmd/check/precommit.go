@@ -62,7 +62,7 @@ func runPreCommit(cmd *cobra.Command, modified, failFast bool) error {
 		checks.NewYAMLChecker(),
 		checks.NewTOMLChecker(),
 		checks.NewFormatChecker(),
-		checks.NewLintChecker(cmd.OutOrStdout(), cmd.ErrOrStderr()),
+		checks.NewLintFilesChecker(cmd.OutOrStdout(), cmd.ErrOrStderr()),
 	}
 
 	results, err := checks.RunPreCommit(ctx, allCheckers, files, failFast)
