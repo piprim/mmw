@@ -36,6 +36,16 @@ func isSizeExempt(path string) bool {
 	return slices.Contains(sizeExemptNames, filepath.Base(path))
 }
 
+// binarySniffLen is how many leading bytes isBinary inspects, matching git.
+const binarySniffLen = 8000
+
+// isBinary reports whether data looks like binary content, using git's own
+// heuristic: a NUL byte within the first binarySniffLen bytes. Line-oriented
+// rules are meaningless for such files, and rewriting them would corrupt them.
+func isBinary(data []byte) bool {
+	return bytes.IndexByte(data[:min(len(data), binarySniffLen)], 0) >= 0
+}
+
 const maxLineBufBytes = 1024 * 1024 // 1 MB — maximum line length for bufio.Scanner
 
 func newLargeBufScanner(r io.Reader) *bufio.Scanner {
@@ -48,7 +58,8 @@ func newLargeBufScanner(r io.Reader) *bufio.Scanner {
 type filesChecker struct{}
 
 // NewFilesChecker returns a Checker (which also implements Fixer) that validates
-// trailing whitespace, missing EOF newline, and file size.
+// trailing whitespace, missing EOF newline, and file size. Binary files are
+// only subject to the size rule.
 func NewFilesChecker() Checker {
 	return &filesChecker{}
 }
@@ -123,6 +134,10 @@ func checkFileContent(path string) ([]Violation, error) {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
+	if isBinary(data) {
+		return vs, nil // only the size rule applies to binary files
+	}
+
 	lineNum := 0
 	scanner := newLargeBufScanner(bytes.NewReader(data))
 
@@ -171,6 +186,10 @@ func fixFileContent(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read: %w", err)
+	}
+
+	if isBinary(data) {
+		return nil
 	}
 
 	var buf bytes.Buffer

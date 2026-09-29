@@ -21,6 +21,9 @@ func NewFilesCmd() *cobra.Command {
   - file size > 500 KB (always reported; --fix has no effect;
     dependency lockfiles such as package-lock.json and go.sum are exempt)
 
+Binary files (images, fonts, ...) are only checked for size and are never
+rewritten by --fix.
+
 Defaults to all git-tracked files when no file arguments are given.`,
 		checks.NewFilesChecker,
 		"rewrite files in-place (strips trailing whitespace, adds EOF newline)",

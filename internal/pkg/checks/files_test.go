@@ -70,6 +70,13 @@ func TestFilesChecker_Check(t *testing.T) {
 		assert.Equal(t, 1, result.Violations[0].Line)
 		assert.Contains(t, result.Violations[0].Message, "trailing whitespace")
 	})
+
+	t.Run("binary file skips whitespace and EOF newline rules", func(t *testing.T) {
+		path := writeTemp(t, "favicon.ico", binaryContent)
+		result, err := checks.NewFilesChecker().Check(t.Context(), []string{path})
+		require.NoError(t, err)
+		assert.False(t, result.HasViolations())
+	})
 }
 
 func TestFilesChecker_Fix(t *testing.T) {
@@ -103,7 +110,19 @@ func TestFilesChecker_Fix(t *testing.T) {
 		assert.True(t, strings.HasSuffix(string(got), "\n}\n"), "EOF newline should be added")
 		assert.Len(t, got, len(oversizedContent("{\n", "}\n")))
 	})
+
+	t.Run("leaves a binary file untouched", func(t *testing.T) {
+		path := writeTemp(t, "favicon.ico", binaryContent)
+		require.NoError(t, fixer.Fix(t.Context(), []string{path}))
+		got, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, binaryContent, string(got))
+	})
 }
+
+// binaryContent mimics an image: a NUL byte marks it binary, and it carries
+// both a trailing-whitespace "line" and no EOF newline, which must be ignored.
+const binaryContent = "\x00\x00\x01\x00 \t\n\xff\xd8 "
 
 // writeTemp creates a temporary file with the given content and returns its path.
 func writeTemp(t *testing.T, name, content string) string {
