@@ -32,9 +32,10 @@ func TestProcessBatch_NoEvents(t *testing.T) {
 
 	mockBus := &mockSystemEventBus{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	relay := NewEventsRelay(pool, mockBus, logger, tablename)
+	relay, err := NewEventsRelay(pool, mockBus, logger, tablename)
+	require.NoError(t, err)
 
-	err := relay.processBatch(ctx)
+	err = relay.processBatch(ctx)
 
 	require.NoError(t, err)
 	assert.Empty(t, mockBus.publishedMsgs, "no messages should be published when table is empty")
@@ -56,7 +57,8 @@ func TestProcessBatch_PublishesAndMarksAsDone(t *testing.T) {
 
 	mockBus := &mockSystemEventBus{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	relay := NewEventsRelay(pool, mockBus, logger, tablename)
+	relay, err := NewEventsRelay(pool, mockBus, logger, tablename)
+	require.NoError(t, err)
 
 	err = relay.processBatch(ctx)
 	require.NoError(t, err)
@@ -84,7 +86,8 @@ func TestProcessBatch_SkipsAlreadyPublished(t *testing.T) {
 
 	mockBus := &mockSystemEventBus{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	relay := NewEventsRelay(pool, mockBus, logger, tablename)
+	relay, err := NewEventsRelay(pool, mockBus, logger, tablename)
+	require.NoError(t, err)
 
 	err = relay.processBatch(ctx)
 	require.NoError(t, err)
@@ -110,7 +113,8 @@ func TestProcessBatch_RollsBackOnPublishError(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	relay := NewEventsRelay(pool, mockBus, logger, tablename)
+	relay, err := NewEventsRelay(pool, mockBus, logger, tablename)
+	require.NoError(t, err)
 
 	err = relay.processBatch(ctx)
 	assert.Error(t, err)
@@ -139,7 +143,8 @@ func TestProcessBatch_MixedPublishedAndUnpublished(t *testing.T) {
 
 	mockBus := &mockSystemEventBus{}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	relay := NewEventsRelay(pool, mockBus, logger, tablename)
+	relay, err := NewEventsRelay(pool, mockBus, logger, tablename)
+	require.NoError(t, err)
 
 	err = relay.processBatch(ctx)
 	require.NoError(t, err)
