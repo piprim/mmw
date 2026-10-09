@@ -40,6 +40,17 @@ attach:                     # "owned" children: every row of table referencing a
     to: acq_recherche
 ```
 
+`transform` rewrites columns in the output, never which rows are selected:
+table → column → SQL expression on the row, aliased `t`. The expression is
+cast to the column type, so one that does not fit fails the dump rather than
+the load; an unknown table or column fails before any data query.
+
+```yaml
+transform:
+  acq_recherche:
+    geom: ST_SimplifyPreserveTopology(t.geom, 0.01)   # or NULL, left(t.notes, 200)…
+```
+
 An attach rule never follows the attached table's other FKs, and attached
 rows do not expand into non-attached children. A rule without a FK from
 `table` to `to`, or whose `table` is excluded, is an error.

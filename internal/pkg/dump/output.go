@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 
@@ -66,6 +67,12 @@ func writeData(ctx context.Context, conn *pgx.Conn, w io.Writer, cat *catalog, r
 			return fmt.Errorf("dump: write: %w", err)
 		}
 		if _, err := conn.PgConn().CopyTo(ctx, w, copySQL(t, ctids)); err != nil {
+			if len(t.Transforms) > 0 {
+				transformed := strings.Join(slices.Sorted(maps.Keys(t.Transforms)), ", ")
+
+				return fmt.Errorf("dump: copy %s (transformed: %s): %w", key, transformed, err)
+			}
+
 			return fmt.Errorf("dump: copy %s: %w", key, err)
 		}
 		if _, err := io.WriteString(w, "\\.\n\n"); err != nil {

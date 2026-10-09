@@ -19,6 +19,9 @@ func Dump(ctx context.Context, conn *pgx.Conn, cfg *Config, w, summary io.Writer
 		if err != nil {
 			return err
 		}
+		if err := cat.applyTransforms(cfg.Transform); err != nil {
+			return err
+		}
 		rows, err := walk(ctx, conn, cat, cfg)
 		if err != nil {
 			return err

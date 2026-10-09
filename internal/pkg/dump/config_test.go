@@ -201,3 +201,29 @@ attach:
 		}
 	})
 }
+
+func TestTransformConfig(t *testing.T) {
+	cfg, err := ParseConfig(strings.NewReader(`
+seeds:
+  - table: acq_recherche
+transform:
+  acq_recherche:
+    geom: ST_SimplifyPreserveTopology(t.geom, 0.01)
+`))
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+
+	t.Run("reads the expression per table and column", func(t *testing.T) {
+		if got := cfg.Transform["acq_recherche"]["geom"]; got != "ST_SimplifyPreserveTopology(t.geom, 0.01)" {
+			t.Errorf("transform = %q", got)
+		}
+	})
+
+	t.Run("an empty expression is an error", func(t *testing.T) {
+		_, err := ParseConfig(strings.NewReader("seeds:\n  - table: a\ntransform:\n  a:\n    b: \"\"\n"))
+		if err == nil || !strings.Contains(err.Error(), "transform a.b: empty expression") {
+			t.Fatalf("err = %v, want transform a.b: empty expression", err)
+		}
+	})
+}

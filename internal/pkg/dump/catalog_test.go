@@ -28,6 +28,13 @@ func TestLoadCatalog(t *testing.T) {
 		}
 	})
 
+	t.Run("column types are in ordinal order", func(t *testing.T) {
+		want := []string{"integer", "integer", "integer", "integer", "timestamp with time zone"}
+		if got := cat.Tables["public.a"].Types; !slices.Equal(got, want) {
+			t.Errorf("a types = %v, want %v", got, want)
+		}
+	})
+
 	t.Run("an inheritance child has its own primary key", func(t *testing.T) {
 		if got := cat.Tables["public.person_emp"].PK; !slices.Equal(got, []string{"id"}) {
 			t.Errorf("person_emp PK = %v, want [id]", got)

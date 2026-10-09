@@ -125,6 +125,22 @@ func copyHeader(t *table) string {
 func copySQL(t *table, ctids []string) string {
 	return fmt.Sprintf(
 		"COPY (SELECT %s FROM ONLY %s t WHERE t.ctid = ANY(%s::tid[]) ORDER BY %s) TO STDOUT",
-		columnList("t", t.Columns), t.qualified(), quoteLiteral(tidArray(ctids)), stableOrder("t", t),
+		selectList(t), t.qualified(), quoteLiteral(tidArray(ctids)), stableOrder("t", t),
 	)
+}
+
+// selectList is the column list of t's COPY: a transformed column is its
+// expression cast to the column type, so an expression of the wrong type
+// fails the dump instead of the load.
+func selectList(t *table) string {
+	parts := make([]string, len(t.Columns))
+	for i, c := range t.Columns {
+		if expr, ok := t.Transforms[c]; ok {
+			parts[i] = fmt.Sprintf("(%s)::%s AS %s", expr, t.Types[i], quoteIdent(c))
+		} else {
+			parts[i] = "t." + quoteIdent(c)
+		}
+	}
+
+	return strings.Join(parts, ", ")
 }

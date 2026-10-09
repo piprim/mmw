@@ -16,7 +16,12 @@ type table struct {
 	Schema  string
 	Name    string
 	Columns []string // in ordinal order
+	Types   []string // the type of each column, as format_type writes it
 	PK      []string // in key order; empty when the table has no primary key
+
+	// Transforms maps a column to the SQL expression written in its place
+	// (Config.Transform), set by applyTransforms.
+	Transforms map[string]string
 }
 
 func (t *table) key() string {
@@ -77,6 +82,10 @@ func (c *catalog) parents(child string) []foreignKey {
 const tablesQuery = `
 SELECT n.nspname, c.relname,
        array(SELECT a.attname::text
+             FROM pg_attribute a
+             WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+             ORDER BY a.attnum),
+       array(SELECT format_type(a.atttypid, a.atttypmod)
              FROM pg_attribute a
              WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
              ORDER BY a.attnum),
@@ -143,7 +152,7 @@ func loadCatalog(ctx context.Context, conn *pgx.Conn) (*catalog, error) {
 
 	err := queryRows(ctx, conn, tablesQuery, func(rows pgx.Rows) error {
 		t := &table{}
-		if err := rows.Scan(&t.Schema, &t.Name, &t.Columns, &t.PK); err != nil {
+		if err := rows.Scan(&t.Schema, &t.Name, &t.Columns, &t.Types, &t.PK); err != nil {
 			return fmt.Errorf("scan table: %w", err)
 		}
 		cat.Tables[t.key()] = t
@@ -224,6 +233,30 @@ func queryRows(ctx context.Context, conn *pgx.Conn, query string, scan func(pgx.
 
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("read rows: %w", err)
+	}
+
+	return nil
+}
+
+// applyTransforms attaches the transform expressions of the config to their
+// tables. An unknown table or column is an error, raised before any data
+// query.
+func (c *catalog) applyTransforms(transform map[string]map[string]string) error {
+	for _, name := range slices.Sorted(maps.Keys(transform)) {
+		key := qualify(name)
+		t := c.Tables[key]
+		if t == nil {
+			return fmt.Errorf("dump: transform: table %s not found", key)
+		}
+		for _, column := range slices.Sorted(maps.Keys(transform[name])) {
+			if !slices.Contains(t.Columns, column) {
+				return fmt.Errorf("dump: transform: column %s.%s not found", key, column)
+			}
+			if t.Transforms == nil {
+				t.Transforms = make(map[string]string)
+			}
+			t.Transforms[column] = transform[name][column]
+		}
 	}
 
 	return nil

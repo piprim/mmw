@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"path"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -26,6 +28,10 @@ type Config struct {
 	ChildrenPerParent *int         `yaml:"children_per_parent"`
 	Exclude           []string     `yaml:"exclude"`
 	Attach            []AttachRule `yaml:"attach"`
+	// Transform rewrites columns in the output: table → column → SQL
+	// expression on the row, aliased t. It never changes which rows are
+	// selected.
+	Transform map[string]map[string]string `yaml:"transform"`
 
 	// Source names the config in the script header. ParseConfig leaves it
 	// empty; Run sets it to the config file path.
@@ -84,6 +90,14 @@ func (c *Config) validate() error {
 	}
 	if err := validPatterns("exclude", c.Exclude); err != nil {
 		return err
+	}
+	for _, tableName := range slices.Sorted(maps.Keys(c.Transform)) {
+		columns := c.Transform[tableName]
+		for _, column := range slices.Sorted(maps.Keys(columns)) {
+			if strings.TrimSpace(columns[column]) == "" {
+				return fmt.Errorf("transform %s.%s: empty expression", tableName, column)
+			}
+		}
 	}
 	for i, a := range c.Attach {
 		if a.Table == "" || a.To == "" {
