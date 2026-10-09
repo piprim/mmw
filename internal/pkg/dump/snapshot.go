@@ -8,8 +8,11 @@ import (
 )
 
 // beginSnapshot opens the transaction every dump query runs in. The settings
-// make COPY output independent of the server's defaults.
+// make COPY output independent of the server's defaults, and row_security = off
+// makes a row-level security policy that would hide rows an error, as in
+// pg_dump, instead of a silently smaller dump.
 const beginSnapshot = `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
+SET row_security = off;
 SET TimeZone = 'UTC';
 SET DateStyle = 'ISO, YMD';
 SET IntervalStyle = 'postgres';

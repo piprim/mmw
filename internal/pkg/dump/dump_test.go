@@ -228,6 +228,27 @@ func TestRun(t *testing.T) {
 		}
 	})
 
+	t.Run("a failed rename leaves no temporary file", func(t *testing.T) {
+		before, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := filepath.Join(dir, "is-a-dir.sql")
+		if err := os.Mkdir(out, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := Run(ctx, &Options{URL: dsn, Config: good, Output: out, Stdout: io.Discard, Stderr: io.Discard}); err == nil {
+			t.Fatal("run succeeded although the output path is a directory")
+		}
+		after, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(after) != len(before)+1 { // + the directory itself
+			t.Errorf("entries after = %v, want %v plus is-a-dir.sql", after, before)
+		}
+	})
+
 	t.Run("a failed dump keeps an existing output file", func(t *testing.T) {
 		out := filepath.Join(dir, "kept.sql")
 		if err := os.WriteFile(out, []byte("old"), 0o600); err != nil {

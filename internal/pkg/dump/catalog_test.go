@@ -14,7 +14,7 @@ func TestLoadCatalog(t *testing.T) {
 	t.Run("lists every table, sorted", func(t *testing.T) {
 		want := []string{
 			"public.Select", "public.a", "public.a_status", "public.audit", "public.b", "public.hub",
-			"public.hub_log", "public.hub_tag", "public.node", "public.person", "public.person_acq", "public.person_emp", "public.status",
+			"public.hub_log", "public.hub_tag", "public.node", "public.person", "public.person_acq", "public.person_emp", "public.secret", "public.status", "public.ticket",
 		}
 		if !slices.Equal(cat.Keys, want) {
 			t.Errorf("Keys = %v, want %v", cat.Keys, want)
@@ -72,6 +72,12 @@ func TestLoadCatalog(t *testing.T) {
 		want := []string{"public.b", "public.hub", "public.person_emp"}
 		if !slices.Equal(got, want) {
 			t.Errorf("parents(a) = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("a sequence used by a non-integer column is left out", func(t *testing.T) {
+		if slices.ContainsFunc(cat.Sequences, func(s sequence) bool { return s.Name == "public.ticket_seq" }) {
+			t.Error("public.ticket_seq is listed; its setval would compare text with integers")
 		}
 	})
 

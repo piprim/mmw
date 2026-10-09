@@ -23,3 +23,8 @@ INSERT INTO a_status (a_id, status_code, note) VALUES
     (6, 'lost', NULL);
 INSERT INTO "Select" (a_id) VALUES (1), (1), (2);                              -- 1, 2, 3
 INSERT INTO hub_tag (hub_id, status_id) VALUES (1, 1), (2, 1), (3, 2);
+INSERT INTO ticket DEFAULT VALUES;
+INSERT INTO ticket DEFAULT VALUES;
+INSERT INTO secret (id) VALUES (1), (2);
+ALTER TABLE secret ENABLE ROW LEVEL SECURITY;
+ALTER TABLE secret FORCE ROW LEVEL SECURITY;

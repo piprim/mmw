@@ -1,6 +1,10 @@
 package db
 
 import (
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/piprim/mmw/internal/pkg/dump"
 	"github.com/spf13/cobra"
 )
@@ -17,8 +21,11 @@ database with the same schema. See internal/pkg/dump/README.md.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts.Stdout, opts.Stderr = cmd.OutOrStdout(), cmd.ErrOrStderr()
+			// Ctrl-C cancels the dump, so Run removes its temporary file.
+			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
 
-			return dump.Run(cmd.Context(), &opts)
+			return dump.Run(ctx, &opts)
 		},
 	}
 

@@ -113,7 +113,8 @@ WHERE k.contype = 'f'`
 
 // sequencesQuery links sequences to the columns drawing from them: through a
 // column default (serial, or a legacy nextval() without OWNED BY) and through
-// an identity column.
+// an identity column. Only numeric columns count: the max of a column like
+// code text DEFAULT 'T' || nextval('s') cannot move the sequence.
 const sequencesQuery = `
 SELECT format('%I.%I', sn.nspname, s.relname), n.nspname, c.relname, a.attname::text
 FROM pg_depend d
@@ -123,6 +124,7 @@ JOIN pg_namespace sn ON sn.oid = s.relnamespace
 JOIN pg_class c ON c.oid = ad.adrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
 JOIN pg_attribute a ON a.attrelid = ad.adrelid AND a.attnum = ad.adnum
+WHERE a.atttypid IN ('int2'::regtype, 'int4'::regtype, 'int8'::regtype, 'numeric'::regtype)
 UNION
 SELECT format('%I.%I', sn.nspname, s.relname), n.nspname, c.relname, a.attname::text
 FROM pg_depend d

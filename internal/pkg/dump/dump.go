@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -73,11 +74,13 @@ func Run(ctx context.Context, opts *Options) error {
 		return Dump(ctx, conn, cfg, opts.Stdout, opts.Stderr)
 	}
 
-	tmp := opts.Output + ".tmp"
-	out, err := os.Create(tmp)
+	// A hidden temporary file next to the output, so the rename is atomic and
+	// a leftover does not look like a script.
+	out, err := os.CreateTemp(filepath.Dir(opts.Output), "."+filepath.Base(opts.Output)+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("dump: %w", err)
 	}
+	tmp := out.Name()
 	if err := Dump(ctx, conn, cfg, out, opts.Stderr); err != nil {
 		_ = out.Close()
 		_ = os.Remove(tmp)
@@ -89,7 +92,15 @@ func Run(ctx context.Context, opts *Options) error {
 
 		return fmt.Errorf("dump: %w", err)
 	}
+	// CreateTemp makes the file 0600; a script is read by other tools.
+	if err := os.Chmod(tmp, 0o644); err != nil {
+		_ = os.Remove(tmp)
+
+		return fmt.Errorf("dump: %w", err)
+	}
 	if err := os.Rename(tmp, opts.Output); err != nil {
+		_ = os.Remove(tmp)
+
 		return fmt.Errorf("dump: %w", err)
 	}
 

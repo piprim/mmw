@@ -41,11 +41,12 @@ func tidArray(ctids []string) string {
 	return "{" + strings.Join(parts, ",") + "}"
 }
 
-// keyOrder orders newest first: by primary key descending, or by ctid
-// descending without one.
+// keyOrder orders newest first: by primary key descending, or without one by
+// the whole row as text descending, which, unlike ctid, VACUUM FULL and
+// updates do not change.
 func keyOrder(alias string, t *table) string {
 	if len(t.PK) == 0 {
-		return alias + ".ctid DESC"
+		return "ROW(" + alias + ".*)::text DESC"
 	}
 	parts := make([]string, len(t.PK))
 	for i, c := range t.PK {

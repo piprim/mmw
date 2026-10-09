@@ -61,9 +61,9 @@ func TestSeedSQL(t *testing.T) {
 			`SELECT t.ctid FROM ONLY "public"."dossier" t WHERE (etat = 1 OR etat = 2) ORDER BY id LIMIT 5`,
 		},
 		{
-			"no primary key orders by ctid",
+			"no primary key orders by the row text, stable across VACUUM FULL",
 			sqlRel, Seed{Limit: intp(2)},
-			`SELECT t.ctid FROM ONLY "erp"."Rel" t ORDER BY t.ctid DESC LIMIT 2`,
+			`SELECT t.ctid FROM ONLY "erp"."Rel" t ORDER BY ROW(t.*)::text DESC LIMIT 2`,
 		},
 		{
 			"query is used as is",

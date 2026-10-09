@@ -34,6 +34,23 @@ func runWalk(t *testing.T, db *pgx.Conn, config string) rowSet {
 	return rows
 }
 
+// walkErr walks the fixture with config and returns the error.
+func walkErr(t *testing.T, db *pgx.Conn, config string) error {
+	t.Helper()
+	cfg := mustConfig(t, config)
+	ctx := context.Background()
+
+	return withSnapshot(ctx, db, func() error {
+		cat, err := loadCatalog(ctx, db)
+		if err != nil {
+			return err
+		}
+		_, err = walk(ctx, db, cat, cfg)
+
+		return err
+	})
+}
+
 // values evaluates expr on the selected rows of the table key, sorted as text.
 func values(t *testing.T, db *pgx.Conn, rows rowSet, key, expr string) []string {
 	t.Helper()
@@ -235,6 +252,35 @@ seeds:
     where: "id = 1"
 `)
 		assertValues(t, db, rows, "public.Select", "t.id", "1", "2")
+	})
+
+	t.Run("a seed query must return the ctid", func(t *testing.T) {
+		err := walkErr(t, db, "seeds:\n  - table: a\n    query: \"SELECT t.id FROM ONLY a t\"\n")
+		if err == nil || !strings.Contains(err.Error(), "seed public.a: the query must return the ctid of t as its first column, got int4") {
+			t.Fatalf("err = %v, want the ctid error", err)
+		}
+	})
+
+	t.Run("row-level security never silently hides rows", func(t *testing.T) {
+		cfg := mustConfig(t, "seeds:\n  - table: secret\n    child_depth: 0\n")
+		ctx := context.Background()
+		var rows rowSet
+		err := withSnapshot(ctx, db, func() error {
+			cat, err := loadCatalog(ctx, db)
+			if err != nil {
+				return err
+			}
+			rows, err = walk(ctx, db, cat, cfg)
+			return err
+		})
+		// A superuser bypasses the policy and gets both rows; anyone else
+		// must get an error, never an empty table.
+		if err == nil && len(rows["public.secret"]) != 2 {
+			t.Fatalf("got %d rows of public.secret and no error, want 2 rows or an error", len(rows["public.secret"]))
+		}
+		if err != nil && !strings.Contains(err.Error(), "row-level security") {
+			t.Fatalf("err = %v, want a row-level security error", err)
+		}
 	})
 
 	t.Run("an unknown seed table is an error", func(t *testing.T) {

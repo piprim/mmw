@@ -44,8 +44,13 @@ An attach rule never follows the attached table's other FKs, and attached
 rows do not expand into non-attached children. A rule without a FK from
 `table` to `to`, or whose `table` is excluded, is an error.
 
-SQL in the config is inserted verbatim. A `query` on an inheritance parent
-must use `FROM ONLY` itself.
+SQL in the config is inserted verbatim. A `query` must return the ctid of the
+seed table (aliased `t`) as its first column, which is checked; on an
+inheritance parent it must use `FROM ONLY` itself.
+
+The dump runs with `row_security = off`, as `pg_dump` does: a row-level
+security policy that would hide rows makes the dump fail instead of silently
+leaving them out. Ctrl-C cancels a dump and removes its temporary file.
 
 The script is one transaction of `COPY ... FROM stdin` blocks followed by a
 `setval` per sequence. It sets `session_replication_role = replica`, which

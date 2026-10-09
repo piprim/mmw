@@ -67,6 +67,19 @@ CREATE TABLE hub_tag (
     status_id int NOT NULL REFERENCES status (id)
 );
 
+-- A sequence used by a text column: it must not be reset by setval.
+CREATE SEQUENCE ticket_seq;
+CREATE TABLE ticket (
+    code text PRIMARY KEY DEFAULT 'T' || nextval('ticket_seq')
+);
+
+-- Row-level security that hides every row, even from the owner; enabled by
+-- dump_data.sql once the rows are in.
+CREATE TABLE secret (
+    id int PRIMARY KEY
+);
+CREATE POLICY secret_hidden ON secret USING (false);
+
 CREATE TABLE audit (
     id  serial PRIMARY KEY,
     msg text NOT NULL

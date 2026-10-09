@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // batchSize bounds the ctid array sent in one query.
@@ -95,7 +96,7 @@ type walker struct {
 func (w *walker) expandSeed(ctx context.Context, s *Seed) error {
 	conn, cat, cfg, rows := w.conn, w.cat, w.cfg, w.rows
 	key := s.key()
-	ctids, err := queryStrings(ctx, conn, seedSQL(cat.Tables[key], s))
+	ctids, err := seedCtids(ctx, conn, seedSQL(cat.Tables[key], s))
 	if err != nil {
 		return fmt.Errorf("dump: seed %s: %w", key, err)
 	}
@@ -191,6 +192,42 @@ func queryBatched(ctx context.Context, conn *pgx.Conn, query string, ctids []str
 	}
 
 	return out, nil
+}
+
+// seedCtids runs a seed query and returns its ctids, checking that the query
+// returns a ctid: an id or another column would only fail later, in an
+// unrelated child or parent query.
+func seedCtids(ctx context.Context, conn *pgx.Conn, query string) ([]string, error) {
+	rows, err := conn.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	if fields := rows.FieldDescriptions(); len(fields) == 0 || fields[0].DataTypeOID != pgtype.TIDOID {
+		got := "no column"
+		if len(fields) > 0 {
+			got = typeName(conn, fields[0].DataTypeOID)
+		}
+
+		return nil, fmt.Errorf("the query must return the ctid of t as its first column, got %s", got)
+	}
+
+	out, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("read rows: %w", err)
+	}
+
+	return out, nil
+}
+
+// typeName names a column type for an error message.
+func typeName(conn *pgx.Conn, oid uint32) string {
+	if t, ok := conn.TypeMap().TypeForOID(oid); ok {
+		return t.Name
+	}
+
+	return fmt.Sprintf("type %d", oid)
 }
 
 // queryStrings returns the first column of every row as text.
