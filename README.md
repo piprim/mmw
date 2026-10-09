@@ -781,6 +781,7 @@ mmw check yaml [files...]                 Check YAML syntax with yamllint
 mmw check lint [--workspace] [packages…]  Run golangci-lint
 mmw check pre-commit [--modified]         Run all checks as a pre-commit gate
 mmw test coverage [flags] [packages]      Print a test coverage table
+mmw db dump -c <url> --config <file>      Dump a consistent data subset as a psql script
 mmw workspace tidy                        go mod tidy every module then go work sync
 mmw workspace status                      Verify module checksums and sync workspace
 mmw workspace sync <module-dir>           Pin a module's HEAD commit across dependents
@@ -944,6 +945,22 @@ Flags:
 | `-r`, `--run` | | Filter test names by regex |
 | `-t`, `--timeout` | | Set test timeout (e.g. `2m`) |
 | `-m`, `--min` | `0` | Exit 1 if any package falls below this % |
+
+### `mmw db dump -c <url> --config <file> [-o <file>]`
+
+Writes a consistent subset of a database (seed rows, their children and every
+row they reference) as a psql script of `COPY` blocks, for example the boot
+snapshot of an e2e test container. See
+[internal/pkg/dump/README.md](internal/pkg/dump/README.md) for the config file.
+
+| Flag | Default | Description |
+|---|---|---|
+| `-c`, `--conn` | | Connection string of the database to dump (required) |
+| `--config` | | Dump configuration file (required) |
+| `-o`, `--output` | stdout | Output file, written atomically |
+
+Integration tests: `go test -tags integration ./internal/pkg/dump/` (Docker, or
+`MMW_DUMP_TEST_DSN` pointing at a server where the role can create databases).
 
 ### `mmw version`
 

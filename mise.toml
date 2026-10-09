@@ -38,6 +38,10 @@ run = "go run ./cmd/mmw/main.go test coverage"
 description = "Run only short tests"
 run = "gotestsum {{vars.GOTESTSUM_OPTIONS}} -- -v -short ./..."
 
+[tasks."test:integration"]
+description = "Run unit and integration tests (requires Docker; dump tests accept MMW_DUMP_TEST_DSN instead)"
+run = "gotestsum {{vars.GOTESTSUM_OPTIONS}} -- -v -tags integration -timeout 10m ./..."
+
 [tasks."test:verbose"]
 description = "Run tests with verbose output"
 run = "gotestsum --format standard-verbose -- -v ./..."
