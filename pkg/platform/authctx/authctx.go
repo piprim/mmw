@@ -15,6 +15,8 @@ import (
 
 type platformContextKey struct{}
 
+type applicationsContextKey struct{}
+
 // ErrUnauthenticated is returned when the request context carries no userID.
 var ErrUnauthenticated = errors.New("unauthenticated")
 
@@ -38,4 +40,19 @@ func UserIDFromContext(ctx context.Context) (uuid.UUID, error) {
 	}
 
 	return id, nil
+}
+
+// WithApplications stores the applications the authenticated user may access
+// in the context. Called by BearerAuthMiddleware after a successful token
+// validation.
+func WithApplications(ctx context.Context, applications []string) context.Context {
+	return context.WithValue(ctx, applicationsContextKey{}, applications)
+}
+
+// ApplicationsFromContext extracts the applications the authenticated user may
+// access from the context. It returns nil if absent.
+func ApplicationsFromContext(ctx context.Context) []string {
+	apps, _ := ctx.Value(applicationsContextKey{}).([]string)
+
+	return apps
 }

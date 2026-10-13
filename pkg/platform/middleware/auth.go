@@ -10,17 +10,25 @@ import (
 	pfauthctx "github.com/piprim/mmw/pkg/platform/authctx"
 )
 
-// TokenValidator validates a bearer token and returns the authenticated user's UUID.
-// Implementations are provided by the caller, typically as a closure over an
-// AuthPrivateService (see the todo module's NewTokenValidator adapter).
-type TokenValidator func(ctx context.Context, token string) (uuid.UUID, error)
+// Identity is who a valid bearer token stands for.
+type Identity struct {
+	UserID uuid.UUID
+	// Applications lists the applications the user may access.
+	Applications []string
+}
+
+// TokenValidator validates a bearer token and returns the authenticated user's
+// Identity. Implementations are provided by the caller, typically as a closure
+// over an AuthPrivateService (see the todo module's NewTokenValidator adapter).
+type TokenValidator func(ctx context.Context, token string) (Identity, error)
 
 // BearerAuthMiddleware returns a Middleware that enforces bearer-token authentication.
 //
 // For each request it:
 //  1. Skips auth for paths in excludedPaths (or any /debug/ path).
 //  2. Extracts the Bearer token from the Authorization header.
-//  3. Calls validate; on success it injects the userID via pfauthctx.WithUserID.
+//  3. Calls validate; on success it injects the userID and the applications via
+//     pfauthctx.WithUserID and pfauthctx.WithApplications.
 //  4. Returns HTTP 401 with a Connect-compatible JSON body on any failure.
 func BearerAuthMiddleware(validate TokenValidator, logger *slog.Logger, excludedPaths []string) Middleware {
 	return func(next http.Handler) http.Handler {
@@ -40,7 +48,7 @@ func BearerAuthMiddleware(validate TokenValidator, logger *slog.Logger, excluded
 				return
 			}
 
-			userID, err := validate(r.Context(), token)
+			identity, err := validate(r.Context(), token)
 			if err != nil {
 				logger.Error("token validation failed", "err", err, "path", r.URL.Path)
 				writeUnauthorized(w)
@@ -48,7 +56,8 @@ func BearerAuthMiddleware(validate TokenValidator, logger *slog.Logger, excluded
 				return
 			}
 
-			ctx := pfauthctx.WithUserID(r.Context(), userID)
+			ctx := pfauthctx.WithUserID(r.Context(), identity.UserID)
+			ctx = pfauthctx.WithApplications(ctx, identity.Applications)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

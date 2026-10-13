@@ -271,10 +271,15 @@ middleware.CORSMiddleware(cfg *config.Server) Middleware
 
 **`BearerAuthMiddleware`**
 
-Enforces bearer-token authentication on every route not in `excludedPaths` (all `/debug/` paths are also always exempt). On a valid token it injects the authenticated user's UUID into the request context via `authctx.WithUserID` so application handlers can read it without depending on HTTP concerns.
+Enforces bearer-token authentication on every route not in `excludedPaths` (all `/debug/` paths are also always exempt). On a valid token it injects the authenticated user's UUID and the applications they may access into the request context via `authctx.WithUserID` and `authctx.WithApplications` so application handlers can read them without depending on HTTP concerns.
 
 ```go
-type TokenValidator func(ctx context.Context, token string) (uuid.UUID, error)
+type Identity struct {
+    UserID       uuid.UUID
+    Applications []string // applications the user may access
+}
+
+type TokenValidator func(ctx context.Context, token string) (Identity, error)
 
 middleware.BearerAuthMiddleware(validate TokenValidator, logger, excludedPaths []string) Middleware
 ```
@@ -283,18 +288,35 @@ middleware.BearerAuthMiddleware(validate TokenValidator, logger, excludedPaths [
 
 ```go
 func NewTokenValidator(svc defauth.AuthPrivateService) pfmiddleware.TokenValidator {
-    return func(ctx context.Context, token string) (uuid.UUID, error) {
+    return func(ctx context.Context, token string) (pfmiddleware.Identity, error) {
         resp, err := svc.ValidateToken(ctx, &authv1.ValidateTokenRequest{Token: token})
         if err != nil {
-            return uuid.Nil, err
+            return pfmiddleware.Identity{}, err
         }
-        return uuid.Parse(resp.GetUserId())
+        userID, err := uuid.Parse(resp.GetUserId())
+        if err != nil {
+            return pfmiddleware.Identity{}, err
+        }
+        return pfmiddleware.Identity{UserID: userID, Applications: resp.GetApplications()}, nil
     }
 }
 
 // Applied per-route:
 authMiddleware := pfmiddleware.BearerAuthMiddleware(NewTokenValidator(infra.AuthSvc), logger, nil)
 mux.Handle(path, authMiddleware(handler))
+```
+
+**`AppAuthorizationMiddleware`**
+
+Lets a request through only if the authenticated user may access a given application, using the applications `BearerAuthMiddleware` put in the context. It must run after `BearerAuthMiddleware`: a request with no authenticated user gets HTTP 401, a user who may not access the application gets HTTP 403 (`permission_denied`).
+
+```go
+middleware.AppAuthorizationMiddleware(application string, logger *slog.Logger) Middleware
+
+// Chain it after the authentication:
+protect := func(h http.Handler) http.Handler {
+    return authMiddleware(pfmiddleware.AppAuthorizationMiddleware("cpro", logger)(h))
+}
 ```
 
 On any failure (missing header, empty token, validation error) the middleware writes HTTP 401 with a Connect-compatible JSON body and does **not** call the next handler:
@@ -475,9 +497,13 @@ ctx = authctx.WithUserID(ctx, userID)
 
 // Read it anywhere downstream:
 userID, ok := authctx.UserID(ctx)
+
+// The applications the user may access travel the same way:
+ctx = authctx.WithApplications(ctx, applications)
+applications := authctx.ApplicationsFromContext(ctx)
 ```
 
-`middleware.BearerAuthMiddleware` validates the `Authorization: Bearer <token>` header, calls a `TokenValidator` closure, and injects the UUID on success. Paths in `excludedPaths` and all `/debug/` routes are skipped.
+`middleware.BearerAuthMiddleware` validates the `Authorization: Bearer <token>` header, calls a `TokenValidator` closure, and injects the user's UUID and applications on success. Paths in `excludedPaths` and all `/debug/` routes are skipped.
 
 usage:
 ```go
