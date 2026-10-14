@@ -19,8 +19,8 @@ import (
 func TestBearerAuthMiddleware(t *testing.T) {
 	t.Run("valid token injects user ID into context", func(t *testing.T) {
 		userID := uuid.New()
-		validate := func(_ context.Context, _ string) (Identity, error) {
-			return Identity{UserID: userID}, nil
+		validate := func(_ context.Context, _ string) (uuid.UUID, error) {
+			return userID, nil
 		}
 
 		called := false
@@ -42,27 +42,9 @@ func TestBearerAuthMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
-	t.Run("valid token injects the user's applications into context", func(t *testing.T) {
-		validate := func(_ context.Context, _ string) (Identity, error) {
-			return Identity{UserID: uuid.New(), Applications: []string{"cpro", "other"}}, nil
-		}
-
-		var got []string
-		next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-			got = pfauthctx.ApplicationsFromContext(r.Context())
-		})
-
-		mw := BearerAuthMiddleware(validate, slog.Default(), nil)
-		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set("Authorization", "Bearer valid-token")
-		mw(next).ServeHTTP(httptest.NewRecorder(), req)
-
-		assert.Equal(t, []string{"cpro", "other"}, got)
-	})
-
 	t.Run("missing token returns 401", func(t *testing.T) {
-		validate := func(_ context.Context, _ string) (Identity, error) {
-			return Identity{UserID: uuid.New()}, nil
+		validate := func(_ context.Context, _ string) (uuid.UUID, error) {
+			return uuid.New(), nil
 		}
 		next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -77,8 +59,8 @@ func TestBearerAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("invalid token returns 401", func(t *testing.T) {
-		validate := func(_ context.Context, _ string) (Identity, error) {
-			return Identity{}, errors.New("invalid token")
+		validate := func(_ context.Context, _ string) (uuid.UUID, error) {
+			return uuid.Nil, errors.New("invalid token")
 		}
 		next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -94,8 +76,8 @@ func TestBearerAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("excluded path skips auth", func(t *testing.T) {
-		validate := func(_ context.Context, _ string) (Identity, error) {
-			return Identity{}, errors.New("should not be called")
+		validate := func(_ context.Context, _ string) (uuid.UUID, error) {
+			return uuid.Nil, errors.New("should not be called")
 		}
 		called := false
 		next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
