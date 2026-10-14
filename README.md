@@ -271,33 +271,33 @@ middleware.CORSMiddleware(cfg *config.Server) Middleware
 
 **`BearerAuthMiddleware`**
 
-Enforces bearer-token authentication on every route not in `excludedPaths` (all `/debug/` paths are also always exempt). On a valid token it injects the authenticated user's UUID and the applications they may access into the request context via `authctx.WithUserID` and `authctx.WithApplications` so application handlers can read them without depending on HTTP concerns.
+Enforces bearer-token authentication on every route not in `excludedPaths` (all `/debug/` paths are also always exempt). On a valid token it injects the authenticated user's UUID into the request context via `authctx.WithUserID` so application handlers can read them without depending on HTTP concerns.
 
 ```go
-type Identity struct {
+type TokenValidation struct {
     UserID       uuid.UUID
-    Applications []string // applications the user may access
+    RenewedToken string // set when an expired token was renewed
 }
 
-type TokenValidator func(ctx context.Context, token string) (Identity, error)
+type TokenValidator func(ctx context.Context, token string) (TokenValidation, error)
 
 middleware.BearerAuthMiddleware(validate TokenValidator, logger, excludedPaths []string) Middleware
 ```
 
-`TokenValidator` is a plain function type — modules provide their own implementation, typically a closure over the auth module's private service:
+`TokenValidator` is a plain function type — modules provide their own implementation, typically a closure over the auth module's private service. When it returns a `RenewedToken`, the middleware sets it in the `X-Renewed-Token` response header (`middleware.RenewedTokenHeader`), before the handler runs, so the client can swap its token whatever the handler answers.
 
 ```go
 func NewTokenValidator(svc defauth.AuthPrivateService) pfmiddleware.TokenValidator {
-    return func(ctx context.Context, token string) (pfmiddleware.Identity, error) {
+    return func(ctx context.Context, token string) (pfmiddleware.TokenValidation, error) {
         resp, err := svc.ValidateToken(ctx, &authv1.ValidateTokenRequest{Token: token})
         if err != nil {
-            return pfmiddleware.Identity{}, err
+            return pfmiddleware.TokenValidation{}, err
         }
         userID, err := uuid.Parse(resp.GetUserId())
         if err != nil {
-            return pfmiddleware.Identity{}, err
+            return pfmiddleware.TokenValidation{}, err
         }
-        return pfmiddleware.Identity{UserID: userID, Applications: resp.GetApplications()}, nil
+        return pfmiddleware.TokenValidation{UserID: userID, RenewedToken: resp.GetRenewedToken()}, nil
     }
 }
 
@@ -498,12 +498,9 @@ ctx = authctx.WithUserID(ctx, userID)
 // Read it anywhere downstream:
 userID, ok := authctx.UserID(ctx)
 
-// The applications the user may access travel the same way:
-ctx = authctx.WithApplications(ctx, applications)
-applications := authctx.ApplicationsFromContext(ctx)
 ```
 
-`middleware.BearerAuthMiddleware` validates the `Authorization: Bearer <token>` header, calls a `TokenValidator` closure, and injects the user's UUID and applications on success. Paths in `excludedPaths` and all `/debug/` routes are skipped.
+`middleware.BearerAuthMiddleware` validates the `Authorization: Bearer <token>` header, calls a `TokenValidator` closure, and injects the user's UUID on success. Paths in `excludedPaths` and all `/debug/` routes are skipped.
 
 usage:
 ```go
