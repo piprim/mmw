@@ -1,0 +1,322 @@
+# Mise configuration for the [[.Name | pascal]] module
+# https://mise.jdx.dev/
+[settings]
+experimental = true
+quiet = true
+
+[tools]
+go = "latest"
+golangci-lint = "latest"
+yamllint = "latest"
+"go:github.com/vektra/mockery/v3" = "v3.7.0"
+
+[shell_alias]
+[[- if .Grpc]]
+dev = "mise run run:dev"
+[[- end]]
+build = "mise run build"
+r = "mise run"
+
+[vars]
+CONTRACTS_DIR = "{{config_root}}/../../contracts"
+GOTESTSUM_OPTIONS = "--format testdox"
+[[- if .Database]]
+MIGRATIONS_DIR = "{{config_root}}/internal/infra/persistence/migrations/scripts"
+[[- end]]
+COMPILE_OPTIONS = "-tags no_clickhouse,no_mysql,no_mssql"
+[[- if .Grpc]]
+BINARY_NAME = "[[.Name]]"
+BINARY_PATH = "./cmd/[[.Name]]"
+[[- end]]
+BUILD_DIR = "bin"
+
+[env]
+_.file = ".envrc"
+APP_ENV = { required = true }
+APP_NAME = { required = true }
+[[- if .Database]]
+DB_PASSWORD = "rcv"            # TODO: make it secret
+DB_URL = "postgres://rcv:{{env.DB_PASSWORD}}@localhost:5432/cpro_development?sslmode=disable"
+[[- else]]
+GATEWAY_TOKEN = "dev"            # TODO: make it secret
+[[- end]]
+
+[tasks.setup]
+description = "Update Repo Deps"
+run = """
+#!/usr/bin/env bash
+  set -euo pipefail
+
+  cd {{config_root}} || exit 1
+  source scripts/common/libs/st.bash
+
+  st.quiet
+
+  st.h1 'Fix GOPRIVATE for this project'
+  st.doing go env -w "GOPRIVATE=ovya.fr/*"
+  st.done
+  st.doing go env -w "GOPRIVATE=github.com/piprim/mmw"
+  st.done
+
+  st.h1 'Update Repo Deps'
+  st.doing "Go Mod Tidy"
+  st.do go mod tidy
+  st.done
+  st.doing "Go Mod Download"
+  st.do go mod download
+  st.done
+  """
+
+[tasks.tools]
+description = "Install needed tools awares APP_ENV value"
+run = "scripts/common/install-tools.sh"
+
+[tasks."tools:update"]
+description = "Install/Update needed tools"
+run = "UPDATE=true scripts/common/install-tools.sh"
+
+[tasks.pre-commit]
+depends = ["arch:check", "buf:lint"]
+description = "Pre-commit checks"
+run = "go tool mmw check pre-commit --modified"
+alias = "pc"
+
+[tasks.generate]
+depends = ["buf:generate"]
+description = "Generate code from protobuf definitions and Go enums"
+run = """
+#!/usr/bin/env bash
+  set -euo pipefail
+
+  cd {{config_root}} || exit 1
+  source scripts/common/libs/st.bash
+
+  st.quiet
+
+  st.doing 'Generating Go Code'
+  st.do go generate ./...
+  st.done
+ """
+
+[tasks."generate:mocks"]
+description = "Generate Go mocks for application ports"
+run = "mockery"
+
+[tasks."buf:generate"]
+description = "Generate the protocol buffer code of this module only (Go types and Connect stubs)"
+run = """
+#!/usr/bin/env bash
+  set -euo pipefail
+
+  cd {{config_root}} || exit 1
+  source scripts/common/libs/st.bash
+
+  st.quiet
+
+  st.doing 'Generating Proto'
+  cd {{vars.CONTRACTS_DIR}}
+  st.do buf generate --template buf.gen.[[.Name]].yaml
+  st.done
+"""
+
+[tasks."buf:deps"]
+description = "Download buf dependencies"
+run = """
+cd {{vars.CONTRACTS_DIR}}
+buf mod update
+"""
+
+[tasks."buf:lint"]
+description = "Lint protobuf files"
+run = """
+#!/usr/bin/env bash
+  set -euo pipefail
+
+  cd {{config_root}} || exit 1
+  source scripts/common/libs/st.bash
+
+  st.quiet
+
+  cd {{vars.CONTRACTS_DIR}}
+  st.doing "Linting proto file"
+  st.do buf lint proto
+"""
+
+[tasks."buf:format"]
+description = "Format the protobuf files of this module"
+run = """
+cd {{vars.CONTRACTS_DIR}}
+buf format -w proto/[[.Name]]
+"""
+
+[tasks."buf:breaking"]
+description = "Check for breaking changes in the protobuf files of this module"
+run = """
+cd {{vars.CONTRACTS_DIR}}
+buf breaking --against '.git#branch=master' proto/[[.Name]]
+"""
+
+[tasks.build]
+description = "Build the application binary"
+depends = ["generate"]
+[[- if not .Grpc]]
+run = "go build {{vars.COMPILE_OPTIONS}} ./..."
+[[- else]]
+run = """
+[ -e {{vars.BUILD_DIR}} ] || mkdir -p {{vars.BUILD_DIR}}
+go build {{vars.COMPILE_OPTIONS}} -o {{vars.BUILD_DIR}}/{{vars.BINARY_NAME}} -v {{vars.BINARY_PATH}}
+"""
+[[- end]]
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = """
+go clean
+rm -rf {{vars.BUILD_DIR}}
+"""
+
+[tasks."test:unit"]
+description = "Run unit tests"
+run = "go tool gotestsum {{vars.GOTESTSUM_OPTIONS}} -- -v ./..."
+
+[tasks."test:coverage"]
+description = "Run tests with coverage report"
+run = """
+go test -v -race -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out -o coverage.html || exit 1
+echo "Coverage report generated: coverage.html"
+"""
+
+[tasks."test:contract"]
+description = "Run the contract tests (no Docker needed)"
+run = "go tool gotestsum {{vars.GOTESTSUM_OPTIONS}} -- -v ./test/contract/..."
+
+[tasks."test:all"]
+description = "Run all tests"
+depends = [[if .Database]]["test:unit", "test:integration", "test:contract"][[else]]["test:unit", "test:contract"][[end]]
+
+[tasks.fmt]
+description = "Format all Go code"
+run = "gofumpt -l -w ."
+
+[tasks.lint]
+description = "Run linter"
+run = "golangci-lint run"
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.check]
+description = "Run all checks (format, vet, lint)"
+depends = ["fmt", "vet", "lint", "buf:lint"]
+
+[tasks."arch:check"]
+description = "Validate architecture boundaries for this module"
+run = "arch-go"
+
+[tasks."arch:probes"]
+description = "Prove the domain rules of arch-go.yml bite"
+run = "scripts/arch-probes.sh"
+
+[tasks."deps:tidy"]
+description = "Tidy Go dependencies"
+run = "go mod tidy"
+
+[tasks."deps:verify"]
+description = "Verify Go dependencies"
+run = "go mod verify"
+
+[[- if .Database]]
+
+[tasks."test:integration"]
+description = "Run the repository tests against a Testcontainers Postgres (requires Docker)"
+run = "go tool gotestsum {{vars.GOTESTSUM_OPTIONS}} -- -v -count=1 -tags integration ./internal/adapters/outbound/..."
+
+# Database tasks
+[tasks."db:migrate:up"]
+description = "Run database migrations up"
+run = "go run {{vars.COMPILE_OPTIONS}} cmd/migration/*.go up"
+
+[tasks."db:migrate:down"]
+description = "Run database migrations down"
+run = "go run {{vars.COMPILE_OPTIONS}} cmd/migration/*.go down"
+
+[tasks."db:migrate:create"]
+description = "Create new SQL/Go migration"
+run = "go run {{vars.COMPILE_OPTIONS}} cmd/migration/*.go create -d {{vars.MIGRATIONS_DIR}}"
+
+[tasks."db:migrate:version"]
+description = "Show current migration version"
+run = "go run cmd/migration/*.go version"
+
+[tasks."db:migrate:fix"]
+description = "Fix the order of migrations"
+run = "go run cmd/migration/*.go fix"
+
+[tasks."db:migrate:reset"]
+description = "Down all the migrations"
+run = "go run cmd/migration/*.go reset"
+
+[tasks."db:migrate:status"]
+description = "Show current migration status"
+run = "go run cmd/migration/*.go status"
+
+[tasks."db:schema:dump"]
+description = "Refresh the sqlc schema (schema.sql) from the live database"
+run = "{{config_root}}/scripts/common/pg-dump-schema-sqlc.sh {{config_root}}"
+
+[tasks."sqlc:generate"]
+description = "Generate the sqlc package from query.sql (needs DB_URL reachable)"
+run = "sqlc generate"
+
+[tasks."sqlc:vet"]
+description = "Vet the sqlc queries against the live database"
+run = "sqlc vet"
+
+[tasks."boa:generate"]
+description = "Generate the boamodel package from the database (needs DB_URL reachable and bungen on PATH)"
+# One run per file. Each <name>.go comes from <name>.go.tmpl. The shipped
+# files were rendered by the scaffold; the first real run rewrites them with
+# the same content (the two models may swap places: bungen sorts by name).
+# Tables are listed explicitly (not the schema): goose's goose_db_version lives
+# in the schema too. Add each new table to the -t list.
+run = """
+dir=internal/adapters/outbound/persistence/postgres/dao/boamodel
+for name in models columns q; do
+  bungen model -c '{{env.DB_URL}}' -t '[[.Name]].event,[[.Name]].[[.Entity]]' -f --tag boa --presence \\
+    -o "$dir/$name.go" --template "$dir/$name.go.tmpl" || exit 1
+done
+"""
+
+[tasks."sql:generate"]
+description = "Generate the boamodel and sqlc packages"
+depends = ["boa:generate", "sqlc:generate"]
+
+[[- end]]
+
+[[- if .Grpc]]
+
+[tasks.run]
+description = "Run the application"
+run = "go run {{vars.BINARY_PATH}}/main.go"
+
+[tasks."run:dev"]
+description = "Run with hot reload (requires air)"
+run = "go tool air"
+[[- end]]
+
+[tasks.default]
+alias = "help"
+
+[tasks.help]
+description = "Display available tasks"
+run = """
+echo "Available tasks:"
+mise tasks
+"""
+
+[tasks.doctor]
+description = "Show tool versions and key environment info"
+run = "{{config_root}}/scripts/common/doctor.sh"
+alias = "dr"

@@ -4,15 +4,16 @@ import (
 	"io/fs"
 	"testing"
 
+	"github.com/piprim/goplt"
 	"github.com/piprim/mmw/pkg/scaffold"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestEmbeddedFS(t *testing.T) {
-	t.Run("top-level entries include modules, contracts, and goplt.toml", func(t *testing.T) {
-		fsys := scaffold.EmbeddedFS()
+	fsys := scaffold.EmbeddedFS()
 
+	t.Run("top-level entries are modules, contracts and goplt.toml", func(t *testing.T) {
 		entries, err := fs.ReadDir(fsys, ".")
 		require.NoError(t, err)
 
@@ -21,14 +22,19 @@ func TestEmbeddedFS(t *testing.T) {
 			names[i] = e.Name()
 		}
 
-		assert.Contains(t, names, "modules")
-		assert.Contains(t, names, "contracts")
-		assert.Contains(t, names, "goplt.toml")
+		assert.ElementsMatch(t, []string{"modules", "contracts", "goplt.toml"}, names)
 	})
 
-	t.Run("goplt.toml is present at FS root", func(t *testing.T) {
-		fsys := scaffold.EmbeddedFS()
-		_, err := fs.Stat(fsys, "goplt.toml")
-		assert.NoError(t, err)
+	t.Run("manifest declares name, entity, database, create-table and grpc only", func(t *testing.T) {
+		m, err := goplt.LoadManifest(fsys)
+		require.NoError(t, err)
+
+		names := make([]string, len(m.Variables))
+		for i, v := range m.Variables {
+			names[i] = v.Name
+		}
+
+		assert.ElementsMatch(t, []string{"Name", "Entity", "Database", "CreateTable", "Grpc"}, names)
+		assert.Equal(t, [2]string{"[[", "]]"}, m.Delimiters)
 	})
 }

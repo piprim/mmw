@@ -12,6 +12,17 @@ import (
 )
 
 func TestUpdateGoWork(t *testing.T) {
+	t.Run("adds notification when notifications is already present", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "go.work"), []byte("go 1.26.1\n\nuse (\n\t.\n\t./modules/notifications\n)\n"), 0o600))
+
+		require.NoError(t, scaffold.UpdateGoWork(dir, "notification"))
+
+		content, err := os.ReadFile(filepath.Join(dir, "go.work"))
+		require.NoError(t, err)
+		assert.Contains(t, string(content), "\t./modules/notification\n")
+	})
+
 	t.Run("inserts new module path into use block", func(t *testing.T) {
 		dir := t.TempDir()
 
@@ -21,7 +32,7 @@ use (
 	.
 	./modules/todo
 )
-`), 0600))
+`), 0o600))
 
 		require.NoError(t, scaffold.UpdateGoWork(dir, "payment"))
 
@@ -43,7 +54,7 @@ use (
 	.
 	./modules/todo
 )
-`), 0600))
+`), 0o600))
 
 		require.NoError(t, scaffold.UpdateGoWork(dir, "payment"))
 
@@ -62,7 +73,7 @@ use (
 	./modules/todo
 	./modules/payment
 )
-`), 0600))
+`), 0o600))
 
 		require.NoError(t, scaffold.UpdateGoWork(dir, "payment"))
 
@@ -72,18 +83,44 @@ use (
 }
 
 func TestUpdateMiseToml(t *testing.T) {
-	t.Run("appends test and test:contract tasks for new module", func(t *testing.T) {
-		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "mise.toml"), []byte(`[tasks."todo:test"]
-run = "cd modules/todo && mise run test"
-`), 0600))
+	write := func(t *testing.T) string {
+		t.Helper()
+		root := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(root, "mise.toml"), []byte("[tasks.x]\nrun = \"true\"\n"), 0o644))
 
-		require.NoError(t, scaffold.UpdateMiseToml(dir, "payment"))
+		return root
+	}
+	read := func(t *testing.T, root string) string {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(root, "mise.toml"))
+		require.NoError(t, err)
 
-		content, _ := os.ReadFile(filepath.Join(dir, "mise.toml"))
-		assert.Contains(t, string(content), `[tasks."payment:test"]`)
-		assert.Contains(t, string(content), `cd modules/payment && mise run test`)
-		assert.Contains(t, string(content), `[tasks."payment:test:contract"]`)
-		assert.Contains(t, string(content), `cd modules/payment && mise run test:contract`)
+		return string(b)
+	}
+
+	t.Run("database and grpc add test, integration, contract and run tasks", func(t *testing.T) {
+		root := write(t)
+		require.NoError(t, scaffold.UpdateMiseToml(root, "facturation", true, true))
+		got := read(t, root)
+		for _, task := range []string{`[tasks."facturation:test"]`, `[tasks."facturation:test:integration"]`, `[tasks."facturation:test:contract"]`, `[tasks."facturation:run"]`} {
+			assert.Contains(t, got, task)
+		}
+	})
+
+	t.Run("gateway in-proc module gets only test and contract tasks", func(t *testing.T) {
+		root := write(t)
+		require.NoError(t, scaffold.UpdateMiseToml(root, "messagerie", false, false))
+		got := read(t, root)
+		assert.Contains(t, got, `[tasks."messagerie:test"]`)
+		assert.Contains(t, got, `[tasks."messagerie:test:contract"]`)
+		assert.NotContains(t, got, "test:integration")
+		assert.NotContains(t, got, `"messagerie:run"`)
+	})
+
+	t.Run("is idempotent", func(t *testing.T) {
+		root := write(t)
+		require.NoError(t, scaffold.UpdateMiseToml(root, "facturation", true, true))
+		require.NoError(t, scaffold.UpdateMiseToml(root, "facturation", true, true))
+		assert.Equal(t, 1, strings.Count(read(t, root), `[tasks."facturation:test"]`))
 	})
 }

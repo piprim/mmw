@@ -1,0 +1,118 @@
+version: 1
+
+# Thresholds for validation
+threshold:
+  compliance: 100 # All rules must pass
+  coverage: 70 # At least 70% of packages must be covered by rules
+
+# Exclude common directories from analysis
+excludedPaths:
+  - 'vendor/**'
+  - '**/*_test.go'
+  - '**/mocks/**'
+  - '**/testdata/**'
+
+# Architecture dependency rules - Clean Architecture enforcement
+dependenciesRules:
+  # Domain Layer (Innermost) - Pure business logic, NO external dependencies
+  - package: '**.domain.**'
+    shouldNotDependsOn:
+      internal:
+        - '**.application.**'
+        - '**.ports'
+        - '**.adapters.**'
+        - '**.infra.**'
+    description: 'Domain layer must be pure - no dependencies on outer layers'
+
+  # Inside the domain layer: one package per domain, no cross-domain imports.
+  # The rules name no particular domain, so a new one is covered as soon as it
+  # exists, whatever its depth. scripts/arch-probes.sh proves they bite.
+  - package: '**.domain'
+    shouldNotDependsOn:
+      internal:
+        - '**.domain.**'
+    description: 'The root domain package depends on nothing else in the domain layer'
+
+  - package: '**.domain.vo'
+    shouldNotDependsOn:
+      internal:
+        - '**.domain.**'
+    description: 'Shared value objects depend on nothing else in the domain layer'
+
+  - package: '**.domain.**'
+    shouldOnlyDependsOn:
+      internal:
+        - '**.domain'
+        - '**.domain.vo'
+    description: 'A domain depends only on the shared event contract and the shared value objects'
+
+  # Ports Layer - Interfaces that define contracts, only depends on domain
+  - package: '**.ports'
+    shouldOnlyDependsOn:
+      internal:
+        - '**.domain.**'
+    description: 'Ports layer defines interfaces and only depends on domain'
+
+  # Application Layer - Use cases/business operations, depends on domain and ports
+  - package: '**.application'
+    shouldOnlyDependsOn:
+      internal:
+        - '**.domain.**'
+        - 'application.**'
+        - '**.ports'
+    description: 'Application layer depends on domain and ports only'
+
+  # Application Sub-packages - Commands, queries, DTOs, context helpers
+  - package: '**.application.**'
+    shouldOnlyDependsOn:
+      internal:
+        - '**.domain.**'
+        - '**.application.**'
+        - '**.ports'
+    description: 'Application sub-packages depend on domain, ports, and other application packages'
+
+  # Inbound Adapters (Primary) - HTTP/gRPC handlers and event consumers
+  - package: '**.adapters.inbound.**'
+    shouldOnlyDependsOn:
+      internal:
+        - '**.application'
+        - '**.application.**'
+        - '**.domain.**'
+        - '**.ports'
+        - '**.adapters.inbound.mapper'
+    description: 'Inbound adapters depend on application, domain, ports and mapper only'
+
+  # Outbound Adapters (Secondary) - Repositories, event publishers, external clients
+  - package: '**.adapters.outbound.**'
+    shouldOnlyDependsOn:
+      internal:
+        - '**.domain.**'
+        - '**.ports'
+        # Code generated into the adapter itself: sqlc queries, boa models.
+        - '**.adapters.outbound.persistence.postgres.dao.**'
+    description: 'Outbound adapters implement ports, depend only on domain, ports and their generated dao'
+
+  # Infrastructure Layer - Configuration and cross-cutting concerns
+  - package: '**.infra.**'
+    shouldOnlyDependsOn:
+      internal:
+        - '**.domain.**'
+    description: 'Infrastructure layer should only depend on domain for type definitions'
+
+  # Config Package - Cross-cutting configuration concern
+  - package: '**.config'
+    shouldNotDependsOn:
+      internal: []
+    description: 'Config package has no internal dependencies'
+
+  # Command Layer (Entry Points) - Can orchestrate and depend on everything
+  - package: '**.cmd.**'
+    shouldNotDependsOn:
+      internal: []
+    description: 'Command layer is entry point and can depend on all internal packages'
+
+  # Root Package (Module Interface) - Exposes module to orchestrator
+  - package: '[[.OrgPrefix]]/[[.Name]]'
+    shouldNotDependsOn:
+      internal: []
+    description: 'Root package exposes module interface and can depend on all internal packages'

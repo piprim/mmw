@@ -18,7 +18,7 @@ func UpdateGoWork(repoRoot, name string) error {
 	}
 
 	newEntry := "\t./modules/" + name
-	if strings.Contains(string(content), newEntry) {
+	if strings.Contains(string(content)+"\n", newEntry+"\n") {
 		return nil // already present, idempotent
 	}
 
@@ -39,15 +39,16 @@ func UpdateGoWork(repoRoot, name string) error {
 	updated := string(content)[:pos] + "\n" + newEntry + string(content)[pos:]
 
 	//nolint:gosec // G703: Path traversal is safe here
-	if err := os.WriteFile(goWorkPath, []byte(updated), 0600); err != nil {
+	if err := os.WriteFile(goWorkPath, []byte(updated), 0o600); err != nil {
 		return fmt.Errorf("write go.work: %w", err)
 	}
 
 	return nil
 }
 
-// UpdateMiseToml adds test/build tasks for the new module to poc/mise.toml.
-func UpdateMiseToml(repoRoot, name string) error {
+// UpdateMiseToml adds the module's tasks to the root mise.toml: test and
+// contract always, integration only with a database, run only with gRPC.
+func UpdateMiseToml(repoRoot, name string, database, grpc bool) error {
 	misePath := filepath.Join(repoRoot, "mise.toml")
 	content, err := os.ReadFile(misePath)
 	if err != nil {
@@ -59,22 +60,21 @@ func UpdateMiseToml(repoRoot, name string) error {
 		return nil // idempotent
 	}
 
-	addition := fmt.Sprintf(`
-[tasks."%s:test"]
-description = "Run unit tests for %s module"
-run = "cd modules/%s && mise run test"
-
-[tasks."%s:test:integration"]
-description = "Run integration tests for %s module"
-run = "cd modules/%s && mise run test:integration"
-
-[tasks."%s:test:contract"]
-description = "Run contract tests for %s module"
-run = "cd modules/%s && mise run test:contract"
-`, name, name, name, name, name, name, name, name, name)
+	task := func(suffix, desc, run string) string {
+		return fmt.Sprintf("\n[tasks.\"%s%s\"]\ndescription = \"%s %s module\"\nrun = \"cd modules/%s && mise run %s\"\n",
+			name, suffix, desc, name, name, run)
+	}
+	addition := task(":test", "Run unit tests for", "test:unit") +
+		task(":test:contract", "Run contract tests for", "test:contract")
+	if database {
+		addition += task(":test:integration", "Run integration tests for", "test:integration")
+	}
+	if grpc {
+		addition += task(":run", "Run the", "run")
+	}
 
 	//nolint:gosec // G703: Path traversal is safe here
-	if err := os.WriteFile(misePath, append(content, []byte(addition)...), 0600); err != nil {
+	if err := os.WriteFile(misePath, append(content, []byte(addition)...), 0o600); err != nil {
 		return fmt.Errorf("write mise.toml: %w", err)
 	}
 

@@ -1,0 +1,8 @@
+# .mockery.yaml v3 Compliant
+template: testify
+formatter: goimports
+force-file-write: true
+dir: '{{.InterfaceDir}}/mocks'
+pkgname: 'mocks'
+filename: '{{.InterfaceName | snakecase}}.go'
+structname: 'Mock{{.InterfaceName}}'

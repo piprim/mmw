@@ -1,0 +1,12 @@
+version: v1
+name: buf.build/golang-standards/[[.Name]]
+deps:
+  - buf.build/googleapis/googleapis
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - STANDARD
+  except:
+    - PACKAGE_VERSION_SUFFIX

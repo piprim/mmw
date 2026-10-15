@@ -1,0 +1,213 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "internal/adapters/outbound/persistence/postgres/dao/sqlc/query.sql"
+    # Refreshed from the live database by `mise run db:schema:dump`.
+    schema: "internal/adapters/outbound/persistence/postgres/dao/schema.sql"
+    # Type-check queries against the running database rather than only the
+    # parsed schema. `sqlc generate` / `sqlc vet` therefore need DB_URL to be
+    # reachable (see [env] in mise.toml).
+    database:
+      uri: "${DB_URL}"
+    analyzer:
+      database: true
+    gen:
+      go:
+        package: "sqlc"
+        out: "internal/adapters/outbound/persistence/postgres/dao/sqlc"
+        sql_package: "pgx/v5"
+        # `db:"<column>"` on every model and row field, so the generated structs
+        # also work with pgx.RowToStructByName in the hand-written repositories.
+        emit_db_tags: true
+        # The catalog holds every table of the database; only emit Go structs
+        # for the ones the queries actually touch.
+        omit_unused_structs: true
+        # Nullable columns become presence.Of[T] (three states: unset, null,
+        # value) instead of pgtype.* / Null* types, in the models as well as in
+        # the query row and parameter structs.
+        #
+        # Every type appears under two names because sqlc resolves the type of
+        # a column twice: the schema parser names the models' columns after the
+        # catalog (`pg_catalog.int4`), while the database analyzer names query
+        # rows and parameters after Postgres' format_type (`integer`,
+        # `numeric(5,2)`, ...). An override only matches its exact db_type, so
+        # both spellings are listed and share one go_type through a YAML anchor.
+        #
+        # sqlc imports only the override's own package, never the packages of
+        # the type argument, so `Of[time.Time]` would not compile. The type
+        # arguments that need an import (Time, UUID, Numeric, JSON, Interval,
+        # Hstore) are aliases declared in dao/presence_args.go, a hand-written
+        # file that sqlc leaves untouched. Enum arguments are the enum types sqlc
+        # generates in the same package.
+        #
+        # Left as sqlc generates them: PostGIS geometry, inet, int4range and
+        # arrays (presence has no scanner for them; arrays are never nullable
+        # for sqlc).
+        overrides:
+          # -- integers (all widths become Go's int) ---------------------------
+          - db_type: "pg_catalog.int2"
+            nullable: true
+            go_type: &presence_int
+              import: "github.com/pivaldi/presence/v2"
+              package: "presence"
+              type: "Of[int]"
+          - db_type: "smallint"
+            nullable: true
+            go_type: *presence_int
+          - db_type: "pg_catalog.int4"
+            nullable: true
+            go_type: *presence_int
+          - db_type: "integer"
+            nullable: true
+            go_type: *presence_int
+          - db_type: "pg_catalog.int8"
+            nullable: true
+            go_type: *presence_int
+          - db_type: "bigint"
+            nullable: true
+            go_type: *presence_int
+          # sqlc's own inference of view and expression columns uses the short
+          # spellings
+          - db_type: "int2"
+            nullable: true
+            go_type: *presence_int
+          - db_type: "int4"
+            nullable: true
+            go_type: *presence_int
+          - db_type: "int"
+            nullable: true
+            go_type: *presence_int
+          - db_type: "int8"
+            nullable: true
+            go_type: *presence_int
+          # NOT NULL integer columns (and integer arrays, which sqlc treats as
+          # NOT NULL) become plain int as well, so both variants of a column
+          # share one base type.
+          - db_type: "pg_catalog.int2"
+            go_type: "int"
+          - db_type: "smallint"
+            go_type: "int"
+          - db_type: "pg_catalog.int4"
+            go_type: "int"
+          - db_type: "integer"
+            go_type: "int"
+          - db_type: "pg_catalog.int8"
+            go_type: "int"
+          - db_type: "bigint"
+            go_type: "int"
+          - db_type: "int2"
+            go_type: "int"
+          - db_type: "int4"
+            go_type: "int"
+          - db_type: "int"
+            go_type: "int"
+          - db_type: "int8"
+            go_type: "int"
+          # -- floating point (presence scans float64 only, so real maps to it too)
+          - db_type: "pg_catalog.float8"
+            nullable: true
+            go_type: &presence_float64
+              import: "github.com/pivaldi/presence/v2"
+              package: "presence"
+              type: "Of[float64]"
+          - db_type: "double precision"
+            nullable: true
+            go_type: *presence_float64
+          - db_type: "pg_catalog.float4"
+            nullable: true
+            go_type: *presence_float64
+          - db_type: "real"
+            nullable: true
+            go_type: *presence_float64
+          # -- numeric (exact decimal, kept as pgtype.Numeric) -------------------
+          - db_type: "pg_catalog.numeric"
+            nullable: true
+            go_type: &presence_numeric
+              import: "github.com/pivaldi/presence/v2"
+              package: "presence"
+              type: "Of[Numeric]"
+          - db_type: "numeric"
+            nullable: true
+            go_type: *presence_numeric
+          # format_type keeps the precision of a table column
+          - db_type: "numeric(5,2)"
+            nullable: true
+            go_type: *presence_numeric
+          - db_type: "numeric(3,2)"
+            nullable: true
+            go_type: *presence_numeric
+          # -- strings (both names are the same on each side) ------------------
+          - db_type: "text"
+            nullable: true
+            go_type: &presence_string
+              import: "github.com/pivaldi/presence/v2"
+              package: "presence"
+              type: "Of[string]"
+          - db_type: "pg_catalog.varchar"
+            nullable: true
+            go_type: *presence_string
+          - db_type: "pg_catalog.bpchar"
+            nullable: true
+            go_type: *presence_string
+          # -- boolean ----------------------------------------------------------
+          - db_type: "pg_catalog.bool"
+            nullable: true
+            go_type: &presence_bool
+              import: "github.com/pivaldi/presence/v2"
+              package: "presence"
+              type: "Of[bool]"
+          - db_type: "boolean"
+            nullable: true
+            go_type: *presence_bool
+          # -- dates and times --------------------------------------------------
+          - db_type: "pg_catalog.timestamp"
+            nullable: true
+            go_type: &presence_time
+              import: "github.com/pivaldi/presence/v2"
+              package: "presence"
+              type: "Of[Time]"
+          # the analyzer does not normalise a precision-qualified timestamp
+          - db_type: "timestamp(0) without time zone"
+            nullable: true
+            go_type: *presence_time
+          - db_type: "pg_catalog.timestamptz"
+            nullable: true
+            go_type: *presence_time
+          - db_type: "date"
+            nullable: true
+            go_type: *presence_time
+          - db_type: "pg_catalog.interval"
+            nullable: true
+            go_type: &presence_interval
+              import: "github.com/pivaldi/presence/v2"
+              package: "presence"
+              type: "Of[Interval]"
+          - db_type: "interval"
+            nullable: true
+            go_type: *presence_interval
+          # -- uuid -------------------------------------------------------------
+          - db_type: "uuid"
+            nullable: true
+            go_type:
+              import: "github.com/pivaldi/presence/v2"
+              package: "presence"
+              type: "Of[UUID]"
+          # -- json / jsonb / hstore ---------------------------------------------
+          - db_type: "jsonb"
+            nullable: true
+            go_type: &presence_json
+              import: "github.com/pivaldi/presence/v2"
+              package: "presence"
+              type: "Of[JSON]"
+          - db_type: "json"
+            nullable: true
+            go_type: *presence_json
+          - db_type: "public.hstore"
+            nullable: true
+            go_type: &presence_hstore
+              import: "github.com/pivaldi/presence/v2"
+              package: "presence"
+              type: "Of[Hstore]"
+          - db_type: "hstore"
+            nullable: true
+            go_type: *presence_hstore

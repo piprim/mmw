@@ -1,0 +1,97 @@
+[[if .Database -]]
+syntax = "proto3";
+
+package [[.Name]].v1;
+
+import "google/protobuf/timestamp.proto";
+import "options/v1/options.proto";
+
+option go_package = "[[.ContractsPath]]/gen/go/[[.Name]]/v1;[[.Name]]v1";
+
+// [[.Entity | pascal]]Service exposes the [[.Entity]] aggregate of the [[.Name]] module.
+service [[.Entity | pascal]]Service {
+  rpc Get[[.Entity | pascal]](Get[[.Entity | pascal]]Request) returns (Get[[.Entity | pascal]]Response);
+  rpc Delete[[.Entity | pascal]](Delete[[.Entity | pascal]]Request) returns (Delete[[.Entity | pascal]]Response);
+}
+
+// [[.Entity | pascal]] is the wire representation of a row of [[.Name]].[[.Entity]].
+message [[.Entity | pascal]] {
+  int64 id = 1;
+  string label = 2;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
+// Get[[.Entity | pascal]]Request specifies which [[.Entity]] to retrieve by its integer primary key.
+message Get[[.Entity | pascal]]Request {
+  int64 id = 1;
+}
+
+// Get[[.Entity | pascal]]Response returns the requested [[.Entity]].
+message Get[[.Entity | pascal]]Response {
+  [[.Entity | pascal]] [[.Entity]] = 1;
+}
+
+// Delete[[.Entity | pascal]]Request specifies which [[.Entity]] to delete.
+message Delete[[.Entity | pascal]]Request {
+  int64 id = 1;
+}
+
+// Delete[[.Entity | pascal]]Response confirms deletion (empty response).
+message Delete[[.Entity | pascal]]Response {}
+
+// [[.Entity | pascal]]DeletedEvent is published when a [[.Entity]] is deleted.
+message [[.Entity | pascal]]DeletedEvent {
+  option (options.v1.topic) = "[[.Name]].[[.Entity]].deleted.v1";
+  string [[.Entity]]_id = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp deleted_at = 3;
+}
+
+// [[.Name | pascal]]ErrorCode enumerates the domain errors of the [[.Name]] module.
+// Shared between Go (via platform.ErrorCode cast) and TypeScript (generated enum).
+enum [[.Name | pascal]]ErrorCode {
+  [[.Name | upper]]_ERROR_CODE_UNSPECIFIED = 0;
+  [[.Name | upper]]_ERROR_CODE_NOT_FOUND = 1;
+  [[.Name | upper]]_ERROR_CODE_INVALID_ID = 2;
+  [[.Name | upper]]_ERROR_CODE_INVALID_LABEL = 3;
+}
+[[- else -]]
+syntax = "proto3";
+
+package [[.Name]].v1;
+
+import "google/protobuf/timestamp.proto";
+import "options/v1/options.proto";
+
+option go_package = "[[.ContractsPath]]/gen/go/[[.Name]]/v1;[[.Name]]v1";
+
+// [[.Entity | pascal]]Service sends [[.Entity]] messages through an external provider.
+service [[.Entity | pascal]]Service {
+  rpc Send[[.Entity | pascal]](Send[[.Entity | pascal]]Request) returns (Send[[.Entity | pascal]]Response);
+}
+
+// Send[[.Entity | pascal]]Request carries the message to send.
+message Send[[.Entity | pascal]]Request {
+  string label = 1;
+}
+
+// Send[[.Entity | pascal]]Response confirms the provider accepted it (empty response).
+message Send[[.Entity | pascal]]Response {}
+
+// [[.Entity | pascal]]SentEvent is published when the provider accepted a [[.Entity]].
+message [[.Entity | pascal]]SentEvent {
+  option (options.v1.topic) = "[[.Name]].[[.Entity]].sent.v1";
+  string label = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp sent_at = 3;
+}
+
+// [[.Name | pascal]]ErrorCode enumerates the domain errors of the [[.Name]] module.
+// Shared between Go (via platform.ErrorCode cast) and TypeScript (generated enum).
+enum [[.Name | pascal]]ErrorCode {
+  [[.Name | upper]]_ERROR_CODE_UNSPECIFIED = 0;
+  [[.Name | upper]]_ERROR_CODE_INVALID_LABEL = 1;
+  [[.Name | upper]]_ERROR_CODE_GATEWAY_UNAVAILABLE = 2;
+}
+[[- end]]

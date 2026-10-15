@@ -1,0 +1,32 @@
+log-level="debug"
+[[- if .Database]]
+
+[database]
+scheme = "postgresql"
+user = "rcv"
+host = "localhost"
+port = 5432
+name = "cpro_development"
+sslmode = "disable"
+[[- else]]
+
+[gateway]
+# ponytail: placeholder endpoint; point it at the real provider.
+url = "http://localhost:9999/[[.Entity]]"
+[[- end]]
+[[- if .Grpc]]
+
+[server]
+# Each module listens on its own port when run standalone: core is 8090,
+# auth 8091. Change this value if it clashes with another module.
+port = 8092
+scheme = "https"
+host = "localhost"
+allowed-origins = ["*"] # IMPORTANT; Change this in production !
+debug-enabled = true
+
+[auth-server]
+port = 8091
+scheme = "http"
+host = "localhost"
+[[- end]]

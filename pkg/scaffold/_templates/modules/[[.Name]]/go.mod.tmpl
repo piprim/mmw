@@ -1,0 +1,38 @@
+module [[.OrgPrefix]]/[[.Name]]
+
+go 1.27.1
+
+require (
+	connectrpc.com/connect v1.19.1
+	github.com/ThreeDotsLabs/watermill v1.5.1
+	github.com/google/uuid v1.6.0
+	github.com/jackc/pgx/v5 v5.9.2
+	github.com/piprim/boa v0.0.0-20261007123030-f832afe3d70a
+	[[.PlatformPath]] v0.1.1-0.20260424155339-cc7c82f34777
+	github.com/pivaldi/presence/v2 v2.1.0
+	github.com/pressly/goose/v3 v3.27.0
+	github.com/rotisserie/eris v0.5.4
+	github.com/stretchr/testify v1.12.1
+	github.com/testcontainers/testcontainers-go v0.41.0
+	github.com/testcontainers/testcontainers-go/modules/postgres v0.41.0
+	golang.org/x/sync v0.20.0
+	google.golang.org/protobuf v1.36.11
+	[[.ContractsPath]] v0.0.0-00010101000000-000000000000
+)
+
+// Tool versions pinned to the workspace's, so go mod tidy does not pull
+// @latest and go work sync does not bump every module.
+require (
+	github.com/air-verse/air v1.64.5 // indirect
+	gotest.tools/gotestsum v1.13.0 // indirect
+)
+
+tool (
+	github.com/air-verse/air
+	[[.PlatformPath]]/cmd/mmw
+	gotest.tools/gotestsum
+)
+
+replace github.com/pressly/goose/v3 => github.com/pivaldi/goose/v3 v3.27.1
+
+replace [[.ContractsPath]] => ../../contracts

@@ -681,98 +681,58 @@ Per-module checks are also discovered and run via `mmw check arch` in each modul
 
 ---
 
-### `pkg/scaffold` — cookiecutter-style module scaffolding
+### `pkg/scaffold` — module scaffolding
 
-Provides the embedded template tree and workspace helpers. Template rendering is delegated to [`goplt`](./goplt/README.md).
+Embedded template tree (`_templates/`) rendered by [`goplt`](https://github.com/piprim/goplt)
+with `[[`/`]]` delimiters, plus the helpers `mmw new module` runs around it.
+The delimiters keep bungen templates and `mise.toml` on their `{{ }}`; three
+opening brackets `[[[` do not lex, so write such spots as
+`[[printf "…[%s…" .Var]]`.
 
 ```go
-// Embedded templates (default) or an external directory:
-fsys := scaffold.EmbeddedFS()
-fsys  = os.DirFS("/path/to/my-templates")
-
-// Load manifest and render with goplt:
-m, err   := goplt.LoadManifest(fsys)
-vars     := map[string]any{"Name": "payment", "OrgPrefix": "github.com/acme", ...}
-err       = goplt.NewGenerator().Generate(fsys, m, repoRoot, vars)
-
-// Update workspace files after generation:
-err = scaffold.UpdateGoWork(repoRoot, "payment")
-err = scaffold.UpdateMiseToml(repoRoot, "payment")
+fsys := scaffold.EmbeddedFS()                        // or os.DirFS("/my/templates")
+m, _ := goplt.LoadManifest(fsys)
+vars, _ := scaffold.ParseVarFlags(m, []string{"name=facturation", "entity=facture"})
+d, _ := scaffold.Detect(repoRoot)                    // OrgPrefix, ContractsPath, PlatformPath
+d.Apply(vars)
+_ = scaffold.Validate(repoRoot, vars)                // ^[a-z][a-z0-9]*$, modules/<name> absent
+_ = scaffold.Render(fsys, repoRoot, vars)
+_ = scaffold.UpdateGoWork(repoRoot, "facturation")
+_ = scaffold.UpdateMiseToml(repoRoot, "facturation")
+_ = scaffold.PostGenerate(ctx, os.Stdout, os.Stderr, repoRoot, "facturation")
 ```
 
-Template functions available in every file via `goplt.DefaultFuncMap()`:
+Manifest variables, in prompt order: `name` and `entity` (required, one
+lower-case word), `database` (bool, default true), `create-table` (bool,
+default true: emits the `<name>.<entity>` table and seed migrations) and `grpc`
+(bool, default true). The three paths are detected, never asked. Template actions use
+`[[.Name]]`, `[[.Name | pascal]]`, `[[.Name | upper]]`, `[[.Entity]]`,
+`[[.Entity | pascal]]`, `[[.OrgPrefix]]`, `[[.ContractsPath]]`,
+`[[.PlatformPath]]`.
 
-| Function | Example |
-|---|---|
-| `pascal` | `{{.Name \| pascal}}` → `Payment` |
-| `lower` | `{{.Name \| lower}}` → `payment` |
-| `snake` | `{{.Name \| snake}}` → `my_payment` |
-| `camel` | `{{.Name \| camel}}` → `myPayment` |
-| `kebab` | `{{.Name \| kebab}}` → `my-payment` |
+Four shapes come out of two booleans. `database=true` is `modules/core` without
+todo, employe and web: one aggregate slice (`Get<Entity>`, `Delete<Entity>`),
+boa repository, outbox, migrations. `database=false` is a gateway slice:
+`Send<Entity>` validates a label, POSTs it to an HTTP provider
+(`adapters/outbound/gateway`) and publishes `<Entity>SentEvent` straight to
+the bus (no outbox, at-most-once). `grpc=false` drops the Connect handler, the
+HTTP server and `cmd/<name>`: the module is in-proc only, like
+`modules/notifications`, and `cmd/cpro` wires it. `create-table` is ignored
+without a database.
 
-**`goplt.toml` format:**
-
-Variables can be declared as plain values (short form) or as a sub-table with an optional `description` shown in the TUI:
-
-```toml
-# short form
-[variables]
-name = ""
-
-# sub-table form — description shown as subtitle in the interactive form
-[variables.name]
-default     = ""
-description = "Module name in kebab-case (e.g. payment, order-management)"
-
-[variables.org-prefix]
-default     = "github.com/acme"
-description = "Go module path prefix for your organisation"
-
-[variables.contracts-path]
-default     = ""
-description = "Go module path of the shared contracts module"
-
-[variables.platform-path]
-default     = "github.com/piprim/mmw"
-description = "Go module path of the MMW platform (rarely changed)"
-
-[variables.with-connect]
-default     = true
-description = "Generate a Connect/gRPC inbound adapter and proto definition"
-
-[variables.with-contract]
-default     = true
-description = "Generate the Go contract package (service interface, DTOs, errors)"
-
-[variables.with-database]
-default     = true
-description = "Generate the PostgreSQL persistence adapter and migration scaffolding"
-
-[variables.license]
-default     = ["MIT", "BSD-3", "GNU GPL v3.0", "Apache Software License 2.0"]
-description = "License to include in the module"
-
-[conditions]
-"modules"                                                                     = "{{if .WithModule}}true{{end}}"
-"modules/{{.Name}}/internal/adapters/inbound/connect"                        = "{{if .WithConnect}}true{{end}}"
-"modules/{{.Name}}/internal/adapters/inbound/inproc"                         = "{{if .WithContract}}true{{end}}"
-"modules/{{.Name}}/internal/infra/persistence/migrations"                    = "{{if .WithDatabase}}true{{end}}"
-"modules/{{.Name}}/cmd/migration"                                             = "{{if .WithDatabase}}true{{end}}"
-"contracts/go/application"                                                    = "{{if .WithContract}}true{{end}}"
-"contracts/proto"                                                             = "{{if and .WithContract .WithConnect}}true{{end}}"
-```
-
-`WithModule` is a routing flag set programmatically (`true` for `mmw new module`, `false` for `mmw new contract`) — it is not a TUI variable and is never shown to the user.
-
-Variable names normalise automatically: `with-connect`, `with_connect`, and `withConnect` all map to `.WithConnect` in templates.
+With a database, the `dao/boamodel` ships pre-rendered; `go test -tags integration ./pkg/scaffold/`
+(Docker, bungen on `PATH`) proves it equals bungen's output, and
+`SCAFFOLD_UPDATE_BOAMODEL=1` refreshes it. Its `boa:generate` task targets
+`-t '<name>.event,<name>.<entity>'` explicitly, not `<name>.*`, because
+goose's `<name>.goose_db_version` lives in the module schema and bungen has no
+exclude flag; a new table is added to that list.
 
 ---
 
 ## CLI — `mmw`
 
 ```
-mmw new module [--template <path>]        Scaffold a new module interactively
-mmw new contract <name>                   Generate a contract definition
+mmw new module [--template <dir>] [--var k=v]...   Scaffold a new module (TUI unless every --var is given)
 mmw check arch                            Validate architectural boundaries
 mmw check files [--fix] [files...]        Check files for whitespace / EOF / size
 mmw check format [--fix] [files...]       Check Go formatting with gofumpt
@@ -791,22 +751,31 @@ mmw version                               Print version, commit, and build time
 
 ### `mmw new module`
 
-Runs an interactive TUI form (via `goplt/tui`) built dynamically from the manifest's `[variables]` section. Each variable's `description` is shown as a subtitle. The org-prefix default is pre-filled from the workspace's `contracts/go.mod` when detected.
+Asks for `name`, `entity`, `database`, `create-table` and `grpc` (TUI from the manifest, skipped
+when `--var name=… --var entity=…` are given), detects the org prefix and
+contracts path from `contracts/go.mod` and the platform path from mmw's own
+module path, then:
 
-Prompts for module name, org prefix, contracts path, and feature flags, then:
+1. renders `modules/<name>/`, `contracts/proto/<name>/v1/<entity>.proto` and `contracts/buf.gen.<name>.yaml`
+2. adds the module to `go.work` and the root `mise.toml`
+3. runs `mise run buf:generate` (root), `go mod tidy` (module), `go work sync` (root), stopping at the first failure and keeping the files
+4. prints the `initModules` snippet for `cmd/cpro/main.go` (it omits `DBPool` and `AuthSvc` when the shape has no database or no gRPC) and the next commands (`mise run stow`, `db:migrate:up`, `arch:check`, `lint`, `test:unit`)
 
-1. Generates the full module tree under `modules/<name>/`
-2. Generates contract definitions under `contracts/` (when `with-contract = true`)
-3. Adds the new module to `go.work`
-4. Registers the module in the root `mise.toml`
+Names follow `^[a-z][a-z0-9]*$`; neither may be a Go keyword, the name may not
+be a common Postgres reserved word, and the entity may not be a generated
+identifier or template import name (`domain`, `label`, `snapshot`, `deleted`,
+`event`, `events`, `errors`, `command`, `query`, `ports`, `gateway`,
+`publisher`, `sent`, `http`, `httptest`, …). It refuses when
+`contracts/proto/<name>` or `contracts/buf.gen.<name>.yaml` already exists.
 
-Pass `--template <path>` to use a custom template directory instead of the embedded defaults.
+With `create-table=false` the module still expects table `<name>.<entity>` with
+columns `id BIGSERIAL PRIMARY KEY`, `label VARCHAR(200) NOT NULL CHECK (length(label) > 0)`,
+`created_at`/`updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`; `test:integration`,
+the health check and `boa:generate` need it.
 
-### `mmw new contract <name>`
-
-Generates only the contract definition files for an existing module:
-- `contracts/definitions/<name>/` — Go interface, DTOs, errors, in-process client
-- `contracts/proto/<name>/v1/` — Protobuf service definition (when `with-connect = true`)
+```bash
+mmw new module --var name=facturation --var entity=facture --var create-table=false
+```
 
 ### `mmw check arch`
 

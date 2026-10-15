@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-package {{.Name}}.v1;
-
-option go_package = "{{.ContractsPath}}/gen/go/{{.Name}}/v1;{{.Name}}v1";
-
-// {{.Name | pascal}}Service defines the RPC API for the {{.Name}} module.
-service {{.Name | pascal}}Service {
-}

@@ -1,53 +1,60 @@
-# MMW module scaffolding manifest — cookiecutter-style
-# Variable names support: hyphen-case, snake_case, camelCase
-# All normalize to PascalCase in templates (e.g. with-connect → .WithConnect)
+# mmw new module — manifest for goplt.
+# Delimiters are [[ ]] so the bungen templates and mise.toml, which contain
+# {{…}}, reach the generated module untouched.
+description = "A cpro2 hexagonal module with one slice"
+delimiters = ["[[", "]]"]
 
-description = "The description"
 [variables.name]
 kind = "input"
 required = true
-description = "Module name in kebab-case (e.g. payment, order-management)"
+description = "Module name, one lower-case word: directory, Go package, Postgres schema, proto package (e.g. facturation)"
 
-[variables.org-prefix]
-kind = "input"
-value     = "github.com/acme"
-description = "Go module path prefix for your organisation (e.g. github.com/acme)"
-
-[variables.contracts-path]
+[variables.entity]
 kind = "input"
 required = true
-description = "Go module path of the shared contracts module (e.g. github.com/acme/my-contracts)"
+description = "Name of the first domain, singular, one lower-case word (e.g. facture)"
 
-[variables.platform-path]
-kind = "input"
-value     = "github.com/piprim/mmw"
-description = "Go module path of the MMW platform (rarely changed)"
-
-[variables.with-connect]
+[variables.database]
 kind = "bool"
-value     = true
-description = "Generate a Connect/gRPC inbound adapter and proto definition"
+value = true
+description = "Persist <entity> in Postgres: schema, migrations, outbox (no: gateway slice calling an external service)"
 
-[variables.with-contract]
+[variables.create-table]
 kind = "bool"
-value     = true
-description = "Generate the Go contract package (service interface, DTOs, errors)"
+value = true
+description = "Create the <name>.<entity> table and seed it with sample rows (ignored without database)"
 
-[variables.with-database]
+[variables.grpc]
 kind = "bool"
-value     = true
-description = "Generate the PostgreSQL persistence adapter and migration scaffolding"
+value = true
+description = "Expose the service over Connect/gRPC (no: in-proc only, like notifications)"
 
-[variables.license]
-kind = "stringChoice"
-value     = ["MIT", "BSD-3", "GNU GPL v3.0", "Apache Software License 2.0"]
-description = "License to include in the module"
-
+# Every matching prefix must hold: the create-table files need both their
+# own condition and the persistence prefix.
 [conditions]
-"modules"                                                                          = "{{if .WithModule}}true{{end}}"
-"modules/{{.Name}}/internal/adapters/inbound/connect"                             = "{{if .WithConnect}}true{{end}}"
-"modules/{{.Name}}/internal/adapters/inbound/inproc"                              = "{{if .WithContract}}true{{end}}"
-"modules/{{.Name}}/internal/infra/persistence/migrations"                         = "{{if .WithDatabase}}true{{end}}"
-"modules/{{.Name}}/cmd/migration"                                                  = "{{if .WithDatabase}}true{{end}}"
-"contracts/go/application"                                                         = "{{if .WithContract}}true{{end}}"
-"contracts/proto"                                                                   = "{{if and .WithContract .WithConnect}}true{{end}}"
+"modules/[[.Name]]/internal/infra/persistence/migrations/scripts/20261013120100_create-[[.Entity]].sql" = "[[if .CreateTable]]true[[end]]"
+"modules/[[.Name]]/internal/infra/persistence/migrations/scripts/20261013120200_seed-[[.Entity]].sql" = "[[if .CreateTable]]true[[end]]"
+"modules/[[.Name]]/internal/infra/persistence/" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/outbound/persistence/" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/outbound/events/outbox_dispatcher.go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/inbound/mapper/[[.Entity]].go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/inbound/mapper/[[.Entity]]_test.go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/ports/uow.go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/ports/events.go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/ports/[[.Entity]]_repository.go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/query/" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/command/[[.Entity]]_delete.go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/command/[[.Entity]]_delete_test.go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/domain/[[.Entity]]/snapshot.go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/cmd/migration/" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/sqlc.yaml" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/ports/[[.Entity]]_gateway.go" = "[[if not .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/ports/publisher.go" = "[[if not .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/command/[[.Entity]]_send.go" = "[[if not .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/command/[[.Entity]]_send_test.go" = "[[if not .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/outbound/gateway/" = "[[if not .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/outbound/events/bus_publisher.go" = "[[if not .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/outbound/events/bus_publisher_test.go" = "[[if not .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/inbound/connect/" = "[[if .Grpc]]true[[end]]"
+"modules/[[.Name]]/cmd/[[.Name]]/" = "[[if .Grpc]]true[[end]]"
+"modules/[[.Name]]/.air.toml" = "[[if .Grpc]]true[[end]]"

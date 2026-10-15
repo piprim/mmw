@@ -1,0 +1,20 @@
+# contracts/buf.gen.[[.Name]].yaml - Generate only the [[.Name | pascal]] API
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: [[.ContractsPath]]/go/network
+inputs:
+  - directory: .
+    paths:
+      - proto/[[.Name]]
+plugins:
+  # Go: protobuf types
+  - remote: buf.build/protocolbuffers/go
+    out: go/network # → contracts/go/network/
+    opt: paths=source_relative
+  # Go: Connect RPC stubs
+  - remote: buf.build/connectrpc/go:v1.19.1
+    out: go/network # → contracts/go/network/
+    opt: paths=source_relative
