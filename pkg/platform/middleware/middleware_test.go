@@ -79,4 +79,19 @@ func TestCORSMiddleware(t *testing.T) {
 		mw(nextHandler).ServeHTTP(recBad, reqBad)
 		assert.Empty(t, recBad.Header().Get("Access-Control-Allow-Origin"))
 	})
+
+	t.Run("exposes the renewed token header to cross-origin clients", func(t *testing.T) {
+		cfg := &pfconfig.Server{Host: "https://api.example.com"}
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(RenewedTokenHeader, "new-token")
+			w.WriteHeader(http.StatusOK)
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/test", nil)
+		req.Header.Set("Origin", "https://api.example.com")
+		rec := httptest.NewRecorder()
+		CORSMiddleware(cfg)(nextHandler).ServeHTTP(rec, req)
+
+		assert.Contains(t, rec.Header().Get("Access-Control-Expose-Headers"), RenewedTokenHeader)
+	})
 }

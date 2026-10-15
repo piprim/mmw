@@ -271,30 +271,66 @@ middleware.CORSMiddleware(cfg *config.Server) Middleware
 
 **`BearerAuthMiddleware`**
 
-Enforces bearer-token authentication on every route not in `excludedPaths` (all `/debug/` paths are also always exempt). On a valid token it injects the authenticated user's UUID into the request context via `authctx.WithUserID` so application handlers can read it without depending on HTTP concerns.
+Enforces bearer-token authentication on every route not in `excludedPaths` (all `/debug/` paths are also always exempt). On a valid token it injects the authenticated user's UUID into the request context via `authctx.WithUserID` so application handlers can read them without depending on HTTP concerns.
 
 ```go
-type TokenValidator func(ctx context.Context, token string) (uuid.UUID, error)
+type TokenValidation struct {
+    UserID       uuid.UUID
+    RenewedToken string // set when an expired token was renewed
+}
+
+type TokenValidator func(ctx context.Context, token string) (TokenValidation, error)
 
 middleware.BearerAuthMiddleware(validate TokenValidator, logger, excludedPaths []string) Middleware
 ```
 
-`TokenValidator` is a plain function type — modules provide their own implementation, typically a closure over the auth module's private service:
+`TokenValidator` is a plain function type — modules provide their own implementation, typically a closure over the auth module's private service. When it returns a `RenewedToken`, the middleware sets it in the `X-Renewed-Token` response header (`middleware.RenewedTokenHeader`), before the handler runs, so the client can swap its token whatever the handler answers.
 
 ```go
 func NewTokenValidator(svc defauth.AuthPrivateService) pfmiddleware.TokenValidator {
-    return func(ctx context.Context, token string) (uuid.UUID, error) {
+    return func(ctx context.Context, token string) (pfmiddleware.TokenValidation, error) {
         resp, err := svc.ValidateToken(ctx, &authv1.ValidateTokenRequest{Token: token})
         if err != nil {
-            return uuid.Nil, err
+            return pfmiddleware.TokenValidation{}, err
         }
-        return uuid.Parse(resp.GetUserId())
+        userID, err := uuid.Parse(resp.GetUserId())
+        if err != nil {
+            return pfmiddleware.TokenValidation{}, err
+        }
+        return pfmiddleware.TokenValidation{UserID: userID, RenewedToken: resp.GetRenewedToken()}, nil
     }
 }
 
 // Applied per-route:
 authMiddleware := pfmiddleware.BearerAuthMiddleware(NewTokenValidator(infra.AuthSvc), logger, nil)
 mux.Handle(path, authMiddleware(handler))
+```
+
+**`AppAuthorizationMiddleware`**
+
+Lets a request through only if the authenticated user may access a given application, as decided by an `AccessChecker` you provide. It must run after `BearerAuthMiddleware`, which tells it who the user is:
+
+| Situation | Response |
+|-----------|----------|
+| No authenticated user | HTTP 401 (`unauthenticated`) |
+| `check` returns `false` | HTTP 403 (`permission_denied`) |
+| `check` returns an error | HTTP 503 (`unavailable`) — a failed check never lets a request through; the error is logged |
+
+```go
+// AccessChecker tells whether the user may access application. Implement it in
+// the app that owns the access data, typically as a closure over one of its
+// queries. An error means the answer is unknown.
+type AccessChecker func(ctx context.Context, userID uuid.UUID, application string) (bool, error)
+
+middleware.AppAuthorizationMiddleware(application string, check AccessChecker, logger *slog.Logger) Middleware
+
+// Chain it after the authentication:
+check := func(ctx context.Context, userID uuid.UUID, application string) (bool, error) {
+    return accessService.CanAccess(ctx, userID, application)
+}
+protect := func(h http.Handler) http.Handler {
+    return authMiddleware(pfmiddleware.AppAuthorizationMiddleware("cpro", check, logger)(h))
+}
 ```
 
 On any failure (missing header, empty token, validation error) the middleware writes HTTP 401 with a Connect-compatible JSON body and does **not** call the next handler:
@@ -475,9 +511,10 @@ ctx = authctx.WithUserID(ctx, userID)
 
 // Read it anywhere downstream:
 userID, ok := authctx.UserID(ctx)
+
 ```
 
-`middleware.BearerAuthMiddleware` validates the `Authorization: Bearer <token>` header, calls a `TokenValidator` closure, and injects the UUID on success. Paths in `excludedPaths` and all `/debug/` routes are skipped.
+`middleware.BearerAuthMiddleware` validates the `Authorization: Bearer <token>` header, calls a `TokenValidator` closure, and injects the user's UUID on success. Paths in `excludedPaths` and all `/debug/` routes are skipped.
 
 usage:
 ```go

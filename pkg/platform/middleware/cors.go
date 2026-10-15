@@ -22,7 +22,7 @@ func CORSMiddleware(cfg *pfconfig.Server) Middleware {
 		AllowedOrigins: allowed,
 		AllowedMethods: connectcors.AllowedMethods(),
 		AllowedHeaders: connectcors.AllowedHeaders(),
-		ExposedHeaders: connectcors.ExposedHeaders(),
+		ExposedHeaders: append(connectcors.ExposedHeaders(), RenewedTokenHeader),
 		MaxAge:         maxAge,
 	})
 
