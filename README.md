@@ -308,14 +308,28 @@ mux.Handle(path, authMiddleware(handler))
 
 **`AppAuthorizationMiddleware`**
 
-Lets a request through only if the authenticated user may access a given application, using the applications `BearerAuthMiddleware` put in the context. It must run after `BearerAuthMiddleware`: a request with no authenticated user gets HTTP 401, a user who may not access the application gets HTTP 403 (`permission_denied`).
+Lets a request through only if the authenticated user may access a given application, as decided by an `AccessChecker` you provide. It must run after `BearerAuthMiddleware`, which tells it who the user is:
+
+| Situation | Response |
+|-----------|----------|
+| No authenticated user | HTTP 401 (`unauthenticated`) |
+| `check` returns `false` | HTTP 403 (`permission_denied`) |
+| `check` returns an error | HTTP 503 (`unavailable`) — a failed check never lets a request through; the error is logged |
 
 ```go
-middleware.AppAuthorizationMiddleware(application string, logger *slog.Logger) Middleware
+// AccessChecker tells whether the user may access application. Implement it in
+// the app that owns the access data, typically as a closure over one of its
+// queries. An error means the answer is unknown.
+type AccessChecker func(ctx context.Context, userID uuid.UUID, application string) (bool, error)
+
+middleware.AppAuthorizationMiddleware(application string, check AccessChecker, logger *slog.Logger) Middleware
 
 // Chain it after the authentication:
+check := func(ctx context.Context, userID uuid.UUID, application string) (bool, error) {
+    return accessService.CanAccess(ctx, userID, application)
+}
 protect := func(h http.Handler) http.Handler {
-    return authMiddleware(pfmiddleware.AppAuthorizationMiddleware("cpro", logger)(h))
+    return authMiddleware(pfmiddleware.AppAuthorizationMiddleware("cpro", check, logger)(h))
 }
 ```
 
