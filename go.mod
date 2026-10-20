@@ -14,7 +14,7 @@ require (
 	github.com/lmittmann/tint v1.1.3
 	github.com/mattn/go-isatty v0.0.21
 	github.com/pelletier/go-toml/v2 v2.3.1
-	github.com/piprim/goplt v0.12.0
+	github.com/piprim/goplt v0.13.0
 	github.com/pressly/goose/v3 v3.27.0
 	github.com/rotisserie/eris v0.5.4
 	github.com/rs/cors v1.11.1
