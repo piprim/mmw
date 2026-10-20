@@ -3,7 +3,7 @@ module github.com/piprim/mmw
 go 1.26.1
 
 require (
-	connectrpc.com/connect v1.19.1
+	connectrpc.com/connect v1.21.1
 	connectrpc.com/cors v0.1.0
 	connectrpc.com/grpcreflect v1.3.0
 	github.com/ThreeDotsLabs/watermill v1.5.1
