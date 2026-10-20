@@ -11,7 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/lib/pq v1.11.2
-	github.com/lmittmann/tint v1.1.3
+	github.com/lmittmann/tint v1.2.1
 	github.com/mattn/go-isatty v0.0.21
 	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/piprim/goplt v0.12.0
