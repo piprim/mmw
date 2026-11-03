@@ -727,29 +727,36 @@ opening brackets `[[[` do not lex, so write such spots as
 `[[printf "…[%s…" .Var]]`.
 
 ```go
-fsys := scaffold.EmbeddedFS()                        // or os.DirFS("/my/templates")
-m, _ := goplt.LoadManifest(fsys)
+moduleFS, sliceFS := scaffold.ModuleFS(), scaffold.SliceFS()   // or os.DirFS("/my/templates/module"), …/slice
+mm, _ := goplt.LoadManifest(moduleFS)
+sm, _ := goplt.LoadManifest(sliceFS)
+m := scaffold.MergeManifests(mm, sm)
 vars, _ := scaffold.ParseVarFlags(m, []string{"name=facturation", "entity=facture"})
 d, _ := scaffold.Detect(repoRoot)                    // OrgPrefix, ContractsPath, PlatformPath
 d.Apply(vars)
 _ = scaffold.Validate(repoRoot, vars)                // ^[a-z][a-z0-9]*$, modules/<name> absent
-_ = scaffold.Render(fsys, repoRoot, vars)
+_ = scaffold.Render(moduleFS, repoRoot, vars)        // module skeleton
+_, _ = scaffold.AddSlice(sliceFS, repoRoot, vars)    // first slice (report lists unwired snippets)
 _ = scaffold.UpdateGoWork(repoRoot, "facturation")
-_ = scaffold.UpdateMiseToml(repoRoot, "facturation")
+_ = scaffold.UpdateMiseToml(repoRoot, "facturation", true, true) // database, grpc
 _ = scaffold.PostGenerate(ctx, os.Stdout, os.Stderr, repoRoot, "facturation")
 ```
 
-Manifest variables, in prompt order: `name` and `entity` (required, one
-lower-case word), `database` (bool, default true), `create-table` (bool,
-default true: emits the `<name>.<entity>` table and seed migrations) and `grpc`
-(bool, default true). The three paths are detected, never asked. Template actions use
+Two manifests, `_templates/module/` (variables `name`, `database`, `grpc`) and
+`_templates/slice/` (`module`, `entity`, `shape`, `create-table`); an external
+`--template` directory holds both as `module/` and `slice/`. `shape` is
+`aggregate`, `read-model` or `gateway` (default `aggregate`, `gateway` without
+a database). `create-table` (default true) emits the `<name>.<entity>` table and
+seed migrations, ignored for `gateway`. The three paths are detected, never asked. Template actions use
 `[[.Name]]`, `[[.Name | pascal]]`, `[[.Name | upper]]`, `[[.Entity]]`,
 `[[.Entity | pascal]]`, `[[.OrgPrefix]]`, `[[.ContractsPath]]`,
 `[[.PlatformPath]]`.
 
-Four shapes come out of two booleans. `database=true` is `modules/core` without
-todo, employe and web: one aggregate slice (`Get<Entity>`, `Delete<Entity>`),
-boa repository, outbox, migrations. `database=false` is a gateway slice:
+`database` and `grpc` shape the module, `shape` the slice. `shape=aggregate` is
+`modules/core` without todo, employe and web: one aggregate slice
+(`Get<Entity>`, `Delete<Entity>`), boa repository, outbox, migrations.
+`shape=read-model` is a query-only slice over an existing table.
+`shape=gateway` (the only shape of a `database=false` module) is a gateway slice:
 `Send<Entity>` validates a label, POSTs it to an HTTP provider
 (`adapters/outbound/gateway`) and publishes `<Entity>SentEvent` straight to
 the bus (no outbox, at-most-once). `grpc=false` drops the Connect handler, the
@@ -758,11 +765,16 @@ HTTP server and `cmd/<name>`: the module is in-proc only, like
 without a database.
 
 With a database, the `dao/boamodel` ships pre-rendered; `go test -tags integration ./pkg/scaffold/`
-(Docker, bungen on `PATH`) proves it equals bungen's output, and
+(Docker, and the repository's `tools/bungen` fork or `BUNGEN`) proves it equals bungen's output, and
 `SCAFFOLD_UPDATE_BOAMODEL=1` refreshes it. Its `boa:generate` task targets
 `-t '<name>.event,<name>.<entity>'` explicitly, not `<name>.*`, because
 goose's `<name>.goose_db_version` lives in the module schema and bungen has no
-exclude flag; a new table is added to that list.
+exclude flag; a new table is added to that list (`mmw new entity` appends it).
+The task runs the repository's bungen fork with
+`go run {{config_root}}/../../tools/bungen/main.go model …`, as `core` does
+through its `tools/bungen` symlink: upstream bungen on `PATH` has no
+`--template`/`--presence` and would emit its default full output into all
+three files.
 
 ---
 
@@ -770,6 +782,7 @@ exclude flag; a new table is added to that list.
 
 ```
 mmw new module [--template <dir>] [--var k=v]...   Scaffold a new module (TUI unless every --var is given)
+mmw new entity [MODULE] [--module <m>] [--template <dir>] [--var k=v]...   Add a slice to an existing module
 mmw check arch                            Validate architectural boundaries
 mmw check files [--fix] [files...]        Check files for whitespace / EOF / size
 mmw check format [--fix] [files...]       Check Go formatting with gofumpt
@@ -788,12 +801,12 @@ mmw version                               Print version, commit, and build time
 
 ### `mmw new module`
 
-Asks for `name`, `entity`, `database`, `create-table` and `grpc` (TUI from the manifest, skipped
+Asks for `name`, `entity`, `database`, `shape`, `create-table` and `grpc` (TUI from the manifest, skipped
 when `--var name=… --var entity=…` are given), detects the org prefix and
 contracts path from `contracts/go.mod` and the platform path from mmw's own
 module path, then:
 
-1. renders `modules/<name>/`, `contracts/proto/<name>/v1/<entity>.proto` and `contracts/buf.gen.<name>.yaml`
+1. renders `modules/<name>/`, `contracts/proto/<name>/v1/<entity>.proto`, `contracts/proto/<name>/v1/errors.proto` and `contracts/buf.gen.<name>.yaml`
 2. adds the module to `go.work` and the root `mise.toml`
 3. runs `mise run buf:generate` (root), `go mod tidy` (module), `go work sync` (root), stopping at the first failure and keeping the files
 4. prints the `initModules` snippet for `cmd/cpro/main.go` (it omits `DBPool` and `AuthSvc` when the shape has no database or no gRPC) and the next commands (`mise run stow`, `db:migrate:up`, `arch:check`, `lint`, `test:unit`)
@@ -813,6 +826,65 @@ the health check and `boa:generate` need it.
 ```bash
 mmw new module --var name=facturation --var entity=facture --var create-table=false
 ```
+
+Other modules reach the slice through `Module.<Entity>Service()` (the
+`contracts/go/application/<name>` interface); the single `Service()` is gone.
+
+### `mmw new entity`
+
+```bash
+mmw new entity facturation --var entity=avoir --var shape=read-model
+mmw new entity --module facturation          # TUI asks for entity and shape
+mmw new entity                               # TUI picks the module from modules/*/
+```
+
+`[MODULE]` or `--module` names the module; without it a picker lists
+`modules/*/`. `database` (is there `internal/infra/persistence/`) and `grpc` (is
+there `cmd/<name>/`) are detected from the module tree, never asked. The shape
+list is narrowed: without a database only `gateway`; the default is `gateway`
+without a database, `aggregate` otherwise. `create-table` is ignored for
+`gateway`; migration timestamps come from the clock.
+
+It refuses when `internal/domain/<entity>/` or the slice's proto already
+exists. Then it renders the slice files, wires the module, and runs
+`mise run buf:generate`, `go mod tidy`, `go work sync`.
+
+**Markers.** Module-level files that list every slice carry a marker line; the
+snippet is inserted on the line before it and the marker stays:
+
+| File | Marker |
+| --- | --- |
+| `<name>.go` | `// mmw:slice-field`, `// mmw:slice-wire`, `// mmw:slice-handler` (grpc) |
+| `adapters/outbound/events/topics.go` | `// mmw:slice-topic` |
+| `adapters/outbound/events/proto.go` | `// mmw:slice-event` |
+| `adapters/inbound/mapper/errors.go` | `// mmw:slice-error` |
+
+Keep the markers in hand edits and add new slices before them. Per-slice files
+(`<entity>_wiring.go`, `events/<entity>_events.go`, `mapper/<entity>_errors.go` (a sentinel table
+read by `DomainErrorFor`),
+`inproc/<entity>_contract_adapter.go`, `testhelpers/<entity>_fake.go`,
+`test/contract/<entity>_test.go`) carry the entity-specific code; the module's
+error codes live in `errors.proto`.
+
+**Fallback.** A file without its marker is not an error: hand-written modules
+(`core`, `auth`, `notifications`) get the slice files, and the "Next" block
+prints each snippet it could not insert ("Not wired: add to <file> before
+<marker>:") plus the `-t` table to add to the bungen list in `mise.toml`.
+`modules/core/cmd/migration/migrate.go` still imports core's root package,
+which imports the postgres adapter: a slice added to core cannot have its
+table migrated until that command is decoupled like the generated one (it
+must take the schema from `internal/infra/persistence/migrations`).
+
+**Red until generated.** An `aggregate` or `read-model` slice does not compile
+(`postgres/<entity>_*`) until you run `mise run db:migrate:up` and
+`mise run boa:generate` in the module. A `gateway` slice compiles at once. Then
+`arch:check`, `lint`, `test:unit`. `db:migrate:up` stays runnable while the
+module is red: `cmd/migration` takes its schema from `migrations.Schema` and
+does not import the module's root package, which imports the postgres adapter.
+
+`dupl` is excluded for `internal/application/query/` in the shared lint
+config. Two freshly generated slices of the same shape still trip it elsewhere
+(handler, adapter, repository, ...) until they get their real fields.
 
 ### `mmw check arch`
 

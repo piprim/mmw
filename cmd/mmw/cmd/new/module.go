@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/piprim/goplt"
@@ -29,15 +30,17 @@ func NewModuleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "module",
 		Short: "Scaffold a new hexagonal module under modules/<name>",
-		Long: `Renders modules/<name>/ with one slice (an aggregate with database=true, a
-gateway with database=false), its proto under contracts/proto/<name>/v1,
-registers the module in go.work and mise.toml, then runs buf:generate, go mod
-tidy and go work sync.
+		Long: `Renders modules/<name>/ with one slice (shape=aggregate, read-model or
+gateway; a module without database only takes gateway), its proto under
+contracts/proto/<name>/v1, registers the module in go.work and mise.toml, then
+runs buf:generate, go mod tidy and go work sync.
 
-With --var for every required variable (name, entity) the TUI is skipped:
+With --var for every required variable (name, entity) the TUI is skipped.
+An external --template directory holds module/ and slice/ subdirectories.
+Later slices: mmw new entity.
 
   mmw new module --var name=facturation --var entity=facture --var create-table=false
-  mmw new module --var name=messagerie --var entity=sms --var database=false --var grpc=false`,
+  mmw new module --var name=messagerie --var entity=sms --var database=false --var shape=gateway --var grpc=false`,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runNewModule(c.Context(), templatePath, varFlags)
 		},
@@ -52,20 +55,30 @@ With --var for every required variable (name, entity) the TUI is skipped:
 func runNewModule(ctx context.Context, templatePath string, varFlags []string) error {
 	root := platform.RootRepo()
 
-	fsys, err := selectTemplateFS(templatePath)
+	moduleFS, err := selectTemplateFS(templatePath, "module")
+	if err != nil {
+		return err
+	}
+	sliceFS, err := selectTemplateFS(templatePath, "slice")
 	if err != nil {
 		return err
 	}
 
-	m, err := goplt.LoadManifest(fsys)
+	moduleM, err := goplt.LoadManifest(moduleFS)
 	if err != nil {
-		return fmt.Errorf("load manifest: %w", err)
+		return fmt.Errorf("load module manifest: %w", err)
 	}
+	sliceM, err := goplt.LoadManifest(sliceFS)
+	if err != nil {
+		return fmt.Errorf("load slice manifest: %w", err)
+	}
+	m := scaffold.MergeManifests(moduleM, sliceM)
 
 	vars, err := collectVars(m, varFlags)
 	if err != nil {
 		return err
 	}
+	scaffold.ApplyShapeDefault(vars)
 
 	detected, err := scaffold.Detect(root)
 	if err != nil {
@@ -81,8 +94,12 @@ func runNewModule(ctx context.Context, templatePath string, varFlags []string) e
 	database, _ := vars["Database"].(bool)
 	grpc, _ := vars["Grpc"].(bool)
 
-	if err := scaffold.Render(fsys, root, vars); err != nil {
-		return fmt.Errorf("render: %w", err)
+	if err := scaffold.Render(moduleFS, root, vars); err != nil {
+		return fmt.Errorf("render module: %w", err)
+	}
+	report, err := scaffold.AddSlice(sliceFS, root, vars)
+	if err != nil {
+		return fmt.Errorf("add slice: %w", err)
 	}
 	if err := scaffold.UpdateGoWork(root, name); err != nil {
 		return fmt.Errorf("update go.work: %w", err)
@@ -92,13 +109,13 @@ func runNewModule(ctx context.Context, templatePath string, varFlags []string) e
 	}
 	if err := scaffold.PostGenerate(ctx, os.Stdout, os.Stderr, root, name); err != nil {
 		warnC.Println(err)
-		printNextSteps(name, vars)
+		printNextSteps(name, vars, report)
 		printTableNote(name, vars)
 
 		return fmt.Errorf("post-generate: %w", err)
 	}
 
-	printNextSteps(name, vars)
+	printNextSteps(name, vars, report)
 	printTableNote(name, vars)
 
 	return nil
@@ -117,9 +134,21 @@ func collectVars(m *goplt.Manifest, varFlags []string) (map[string]any, error) {
 	}
 
 	for i := range m.Variables {
-		if v, ok := given[m.Variables[i].Name]; ok {
-			m.Variables[i].Value = v
+		v, ok := given[m.Variables[i].Name]
+		if !ok {
+			continue
 		}
+		// A choice variable keeps its option list; the given value goes first,
+		// which huh.NewSelect pre-selects.
+		if choices, isList := m.Variables[i].Value.([]string); isList {
+			if pick, isStr := v.(string); isStr && slices.Contains(choices, pick) {
+				rest := slices.DeleteFunc(slices.Clone(choices), func(c string) bool { return c == pick })
+				m.Variables[i].Value = append([]string{pick}, rest...)
+			}
+
+			continue
+		}
+		m.Variables[i].Value = v
 	}
 
 	orderVars(m)
@@ -128,13 +157,23 @@ func collectVars(m *goplt.Manifest, varFlags []string) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("prompt cancelled: %w", err)
 	}
+	forceGatewayWithoutDatabase(vars)
 
 	return vars, nil
 }
 
+// forceGatewayWithoutDatabase sets Shape to gateway when Database is false:
+// the TUI always returns a shape (its first option, aggregate, is
+// pre-selected), which cannot mean "no choice" and would fail Validate.
+func forceGatewayWithoutDatabase(vars map[string]any) {
+	if database, ok := vars["Database"].(bool); ok && !database {
+		vars["Shape"] = scaffold.ShapeGateway
+	}
+}
+
 // promptOrder lists the variables the TUI asks first; goplt sorts them
 // alphabetically, which puts create-table before the name it refers to.
-var promptOrder = []string{"Name", "Entity", "Database", "CreateTable", "Grpc"}
+var promptOrder = []string{moduleVar, "Name", "Entity", "Database", "Shape", "CreateTable", "Grpc"}
 
 // orderVars moves the promptOrder variables to the front, keeping the others
 // in their original order.
@@ -151,9 +190,9 @@ func orderVars(m *goplt.Manifest) {
 
 // printTableNote tells the user which table to create when create-table=false.
 func printTableNote(name string, vars map[string]any) {
-	database, _ := vars["Database"].(bool)
+	shape, _ := vars["Shape"].(string)
 	create, _ := vars["CreateTable"].(bool)
-	if !database || create {
+	if shape == "gateway" || create {
 		return
 	}
 	entity, _ := vars["Entity"].(string)
@@ -162,16 +201,13 @@ func printTableNote(name string, vars map[string]any) {
 		"test:integration, the health check and boa:generate need it.\n", name, entity)
 }
 
-func printNextSteps(name string, vars map[string]any) {
-	database, _ := vars["Database"].(bool)
+func printNextSteps(name string, vars map[string]any, report scaffold.SliceReport) {
 	grpc, _ := vars["Grpc"].(bool)
+	database, _ := vars["Database"].(bool)
 
 	successC.Printf("\n✓ Module %q generated in modules/%s/\n", name, name)
 	warnC.Println("Next:")
 	infoC.Println("  - mise run stow                              (scripts/common, .golangci.yml)")
-	if database {
-		infoC.Printf("  - cd modules/%s && mise run db:migrate:up\n", name)
-	}
 	infoC.Println("  - add to initModules in cmd/cpro/main.go:")
 	fields := "EventBus: eventBus, Subscriber: rawBus,"
 	if database {
@@ -187,6 +223,29 @@ func printNextSteps(name string, vars map[string]any) {
         if err != nil { return nil, err }
 `, name, fields)
 	infoC.Println("    and append it to the returned slice, after core.")
-	infoC.Printf("    other modules receive %[1]sModule.Service() (the contracts/go/application/%[1]s interface)\n", name)
+	printSliceNext(name, vars, report)
+}
+
+// printSliceNext prints what is left to do after a slice was added: unwired
+// snippets, the bungen table hint, migrations, boa models, checks.
+func printSliceNext(name string, vars map[string]any, report scaffold.SliceReport) {
+	entity, _ := vars["Entity"].(string)
+	shape, _ := vars["Shape"].(string)
+
+	for _, s := range report.Unwired {
+		warnC.Printf("Not wired: add to %s before %s:\n%s\n", s.Path, s.Marker, s.Text)
+	}
+	if report.TableUnlisted != "" {
+		warnC.Printf("Not listed: add -t %s to the bungen list in mise.toml\n", report.TableUnlisted)
+	}
+	database, _ := vars["Database"].(bool)
+	switch {
+	case shape != scaffold.ShapeGateway:
+		infoC.Printf("  - cd modules/%s && mise run db:migrate:up && mise run boa:generate\n", name)
+	case database:
+		infoC.Printf("  - cd modules/%s && mise run db:migrate:up   (outbox table)\n", name)
+	}
+	infoC.Printf("    other modules receive %[1]sModule.%[2]sService() (the contracts/go/application/%[1]s interface)\n",
+		name, strings.ToUpper(entity[:1])+entity[1:])
 	infoC.Printf("  - cd modules/%s && mise run arch:check && mise run lint && mise run test:unit\n", name)
 }

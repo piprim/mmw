@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go/token"
+	"go/types"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -23,6 +24,9 @@ type Detected struct {
 	ContractsPath string // module path of contracts/go.mod
 	PlatformPath  string // module path of mmw itself
 }
+
+// ShapeGateway is the slice shape that calls an external service.
+const ShapeGateway = "gateway"
 
 const defaultPlatformPath = "github.com/piprim/mmw"
 
@@ -68,6 +72,32 @@ func (d Detected) Apply(vars map[string]any) {
 	vars["OrgPrefix"] = d.OrgPrefix
 	vars["ContractsPath"] = d.ContractsPath
 	vars["PlatformPath"] = d.PlatformPath
+	if name, ok := vars["Name"].(string); ok {
+		vars["ModulePath"] = d.OrgPrefix + "/" + name
+	}
+}
+
+// AllowedShapes lists the slice shapes a module with or without a database
+// accepts.
+func AllowedShapes(database bool) []string {
+	if database {
+		return []string{"aggregate", "read-model", ShapeGateway}
+	}
+
+	return []string{ShapeGateway}
+}
+
+// ApplyShapeDefault turns an unset Shape (absent, empty, or the choice list
+// ParseVarFlags seeds) into the default for Database.
+func ApplyShapeDefault(vars map[string]any) {
+	if s, _ := vars["Shape"].(string); s != "" {
+		return
+	}
+	if database, _ := vars["Database"].(bool); database {
+		vars["Shape"] = "aggregate"
+	} else {
+		vars["Shape"] = ShapeGateway
+	}
 }
 
 // ParseVarFlags seeds vars with the manifest defaults, then overlays each
@@ -139,6 +169,10 @@ var reservedEntities = []string{
 	"command", "query", "ports", "application", "mapper", "connect", "uuid", "time", "context",
 	"testing", "testhelpers", "authctx", "boa", "eris", "pgx", "boamodel", "postgres",
 	"gateway", "publisher", "sent", "http", "httptest", "json", "bytes", "io", "pfevents", "protojson",
+	"wiring", "health", "names", "mount", "stub", "helpers", "platform", "fmt", "strings", "sync",
+	"inproc", "migrations", "stdlib", "wait", "pgxpool", "protoreflect", "timestamppb",
+	// Module fields next to the slice's field
+	"relay", "server", "router", "logger",
 	// locals next to an entity-package reference
 	"a", "adapter", "c", "cases", "cmd", "created", "ctx", "dispatcher", "e", "err", "ev", "g",
 	"got", "handler", "id", "in", "input", "item", "lbl", "m", "method", "name", "now", "ok", "p",
@@ -154,32 +188,61 @@ var reservedSchemas = []string{
 	"from", "into", "union",
 }
 
-// Validate checks the user-given variables and that the module does not exist.
+// Validate checks the module-level variables and that the module does not
+// exist, then the slice with ValidateSlice.
 func Validate(repoRoot string, vars map[string]any) error {
 	name, _ := vars["Name"].(string)
-	entity, _ := vars["Entity"].(string)
 
-	for _, kv := range []struct{ key, value string }{{"name", name}, {"entity", entity}} {
-		if !identRe.MatchString(kv.value) {
-			return fmt.Errorf("%s %q must be one lower-case word (a-z0-9, letter first)", kv.key, kv.value)
-		}
-		if token.IsKeyword(kv.value) {
-			return fmt.Errorf("%s %q is a Go keyword", kv.key, kv.value)
-		}
+	if !identRe.MatchString(name) {
+		return fmt.Errorf("name %q must be one lower-case word (a-z0-9, letter first)", name)
 	}
-
+	if token.IsKeyword(name) {
+		return fmt.Errorf("name %q is a Go keyword", name)
+	}
 	if slices.Contains(reservedSchemas, name) {
 		return fmt.Errorf("name %q is a Postgres reserved word (it is the schema name)", name)
-	}
-
-	if slices.Contains(reservedEntities, entity) {
-		return fmt.Errorf("entity %q is reserved (it collides with a generated identifier)", entity)
 	}
 
 	for _, rel := range []string{
 		filepath.Join("modules", name),
 		filepath.Join("contracts", "proto", name),
 		filepath.Join("contracts", "buf.gen."+name+".yaml"),
+	} {
+		if _, err := os.Stat(filepath.Join(repoRoot, rel)); err == nil {
+			return fmt.Errorf("%s already exists", filepath.ToSlash(rel))
+		}
+	}
+
+	return ValidateSlice(repoRoot, vars)
+}
+
+// ValidateSlice checks the entity, the shape and that the entity's domain
+// package and proto file are not there yet.
+func ValidateSlice(repoRoot string, vars map[string]any) error {
+	name, _ := vars["Name"].(string)
+	entity, _ := vars["Entity"].(string)
+
+	if !identRe.MatchString(entity) {
+		return fmt.Errorf("entity %q must be one lower-case word (a-z0-9, letter first)", entity)
+	}
+	if token.IsKeyword(entity) {
+		return fmt.Errorf("entity %q is a Go keyword", entity)
+	}
+	if slices.Contains(reservedEntities, entity) || types.Universe.Lookup(entity) != nil {
+		return fmt.Errorf("entity %q is reserved (it collides with a generated identifier)", entity)
+	}
+
+	ApplyShapeDefault(vars)
+	database, _ := vars["Database"].(bool)
+	shape, _ := vars["Shape"].(string)
+	if !slices.Contains(AllowedShapes(database), shape) {
+		return fmt.Errorf("shape %q is not allowed in module %q (database=%t; allowed: %s)",
+			shape, name, database, strings.Join(AllowedShapes(database), ", "))
+	}
+
+	for _, rel := range []string{
+		filepath.Join("modules", name, "internal", "domain", entity),
+		filepath.Join("contracts", "proto", name, "v1", entity+".proto"),
 	} {
 		if _, err := os.Stat(filepath.Join(repoRoot, rel)); err == nil {
 			return fmt.Errorf("%s already exists", filepath.ToSlash(rel))
@@ -204,7 +267,7 @@ func Render(fsys fs.FS, repoRoot string, vars map[string]any) error {
 
 	name, _ := vars["Name"].(string)
 	probes := filepath.Join(repoRoot, "modules", name, "scripts", "arch-probes.sh")
-	if err := os.Chmod(probes, 0o755); err != nil {
+	if err := os.Chmod(probes, 0o755); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("chmod %s: %w", probes, err)
 	}
 

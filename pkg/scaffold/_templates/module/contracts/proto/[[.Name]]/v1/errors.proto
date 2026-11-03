@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package [[.Name]].v1;
+
+option go_package = "[[.ContractsPath]]/gen/go/[[.Name]]/v1;[[.Name]]v1";
+
+// [[.Name | pascal]]ErrorCode enumerates the domain errors of the [[.Name]] module, the
+// union of what its slices raise. Shared between Go (via platform.ErrorCode
+// cast) and TypeScript (generated enum).
+enum [[.Name | pascal]]ErrorCode {
+  [[.Name | upper]]_ERROR_CODE_UNSPECIFIED = 0;
+  [[.Name | upper]]_ERROR_CODE_NOT_FOUND = 1;
+  [[.Name | upper]]_ERROR_CODE_INVALID_ID = 2;
+  [[.Name | upper]]_ERROR_CODE_INVALID_LABEL = 3;
+  [[.Name | upper]]_ERROR_CODE_GATEWAY_UNAVAILABLE = 4;
+}

@@ -909,6 +909,10 @@ linters:
       - linters:
           - cyclop
         path: (.+)_test\.go
+      # query handlers of two slices are alike by construction (dupl)
+      - linters:
+          - dupl
+        path: internal/application/query/
     paths:
       - etc/
       - test/testdata_etc/

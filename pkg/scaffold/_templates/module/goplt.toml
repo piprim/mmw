@@ -1,0 +1,33 @@
+# mmw new module — manifest of the module-level template (once per module).
+# Delimiters are [[ ]] so the bungen templates and mise.toml, which contain
+# {{…}}, reach the generated module untouched.
+description = "A cpro2 hexagonal module"
+delimiters = ["[[", "]]"]
+
+[variables.name]
+kind = "input"
+required = true
+description = "Module name, one lower-case word: directory, Go package, Postgres schema, proto package (e.g. facturation)"
+
+[variables.database]
+kind = "bool"
+value = true
+description = "Persist <entity> in Postgres: schema, migrations, outbox (no: gateway slice calling an external service)"
+
+[variables.grpc]
+kind = "bool"
+value = true
+description = "Expose the service over Connect/gRPC (no: in-proc only, like notifications)"
+
+# Every matching prefix must hold.
+[conditions]
+"modules/[[.Name]]/internal/adapters/outbound/events/outbox_dispatcher.go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/ports/uow.go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/application/ports/events.go" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/cmd/migration/" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/sqlc.yaml" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/cmd/[[.Name]]/" = "[[if .Grpc]]true[[end]]"
+"modules/[[.Name]]/.air.toml" = "[[if .Grpc]]true[[end]]"
+"modules/[[.Name]]/internal/infra/persistence/" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/outbound/persistence/" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/inbound/connect/" = "[[if .Grpc]]true[[end]]"

@@ -35,18 +35,26 @@ func TestDetect(t *testing.T) {
 	})
 
 	t.Run("Apply sets the three detected keys", func(t *testing.T) {
-		vars := map[string]any{"Name": "x"}
+		vars := map[string]any{}
 		scaffold.Detected{OrgPrefix: "a", ContractsPath: "a/c", PlatformPath: "p"}.Apply(vars)
-		assert.Equal(t, map[string]any{"Name": "x", "OrgPrefix": "a", "ContractsPath": "a/c", "PlatformPath": "p"}, vars)
+		assert.Equal(t, map[string]any{"OrgPrefix": "a", "ContractsPath": "a/c", "PlatformPath": "p"}, vars)
+	})
+
+	t.Run("sets ModulePath to OrgPrefix/Name on Apply", func(t *testing.T) {
+		vars := map[string]any{"Name": "x"}
+		scaffold.Detected{OrgPrefix: "a/b"}.Apply(vars)
+		assert.Equal(t, "a/b/x", vars["ModulePath"])
 	})
 }
 
 func loadManifest(t *testing.T) *goplt.Manifest {
 	t.Helper()
-	m, err := goplt.LoadManifest(scaffold.EmbeddedFS())
+	mod, err := goplt.LoadManifest(scaffold.ModuleFS())
+	require.NoError(t, err)
+	sl, err := goplt.LoadManifest(scaffold.SliceFS())
 	require.NoError(t, err)
 
-	return m
+	return scaffold.MergeManifests(mod, sl)
 }
 
 func TestParseVarFlags(t *testing.T) {
@@ -133,7 +141,7 @@ func TestValidate(t *testing.T) {
 		})
 	}
 
-	for _, e := range []string{"gateway", "publisher", "sent", "httptest", "cmd", "adapter", "svc"} {
+	for _, e := range []string{"gateway", "publisher", "sent", "httptest", "cmd", "adapter", "svc", "wiring", "mount", "stub", "router"} {
 		t.Run("rejects reserved entity "+e, func(t *testing.T) {
 			vars := ok()
 			vars["Entity"] = e
@@ -188,9 +196,51 @@ func TestValidate(t *testing.T) {
 func TestRenderFunc(t *testing.T) {
 	t.Run("renders into the root and makes arch-probes.sh executable", func(t *testing.T) {
 		root := t.TempDir()
-		require.NoError(t, scaffold.Render(scaffold.EmbeddedFS(), root, fixtureVars()))
+		require.NoError(t, scaffold.Render(scaffold.ModuleFS(), root, fixtureVars()))
 		info, err := os.Stat(filepath.Join(root, "modules", "facturation", "scripts", "arch-probes.sh"))
 		require.NoError(t, err)
 		assert.NotZero(t, info.Mode()&0o100, "arch-probes.sh should be executable")
+	})
+
+	t.Run("rendering the slice tree alone needs no probe script", func(t *testing.T) {
+		assert.NoError(t, scaffold.Render(scaffold.SliceFS(), t.TempDir(), fixtureVars()))
+	})
+}
+
+func TestApplyShapeDefault(t *testing.T) {
+	t.Run("gateway when database is false", func(t *testing.T) {
+		vars := map[string]any{"Database": false}
+		scaffold.ApplyShapeDefault(vars)
+		assert.Equal(t, "gateway", vars["Shape"])
+	})
+	t.Run("aggregate when database is true", func(t *testing.T) {
+		vars := map[string]any{"Database": true}
+		scaffold.ApplyShapeDefault(vars)
+		assert.Equal(t, "aggregate", vars["Shape"])
+	})
+	t.Run("replaces a choice list left by ParseVarFlags", func(t *testing.T) {
+		vars := map[string]any{"Database": true, "Shape": []string{"aggregate", "read-model", "gateway"}}
+		scaffold.ApplyShapeDefault(vars)
+		assert.Equal(t, "aggregate", vars["Shape"])
+	})
+	t.Run("keeps an explicit shape", func(t *testing.T) {
+		vars := map[string]any{"Database": true, "Shape": "read-model"}
+		scaffold.ApplyShapeDefault(vars)
+		assert.Equal(t, "read-model", vars["Shape"])
+	})
+}
+
+func TestValidate_Shape(t *testing.T) {
+	base := func(db bool, shape string) map[string]any {
+		return map[string]any{"Name": "facturation", "Entity": "facture", "Database": db, "Shape": shape}
+	}
+	t.Run("rejects read-model without a database", func(t *testing.T) {
+		assert.ErrorContains(t, scaffold.Validate(t.TempDir(), base(false, "read-model")), "shape")
+	})
+	t.Run("rejects an unknown shape", func(t *testing.T) {
+		assert.ErrorContains(t, scaffold.Validate(t.TempDir(), base(true, "bogus")), "shape")
+	})
+	t.Run("accepts gateway with a database", func(t *testing.T) {
+		assert.NoError(t, scaffold.Validate(t.TempDir(), base(true, "gateway")))
 	})
 }

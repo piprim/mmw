@@ -1,0 +1,50 @@
+# mmw new entity — manifest of the slice template (once per entity).
+description = "One slice of a cpro2 hexagonal module"
+delimiters = ["[[", "]]"]
+
+[variables.module]
+kind = "stringChoice"
+value = []
+description = "Module the slice joins (filled by mmw new entity; mmw new module drops it)"
+
+[variables.entity]
+kind = "input"
+required = true
+description = "Name of the domain, singular, one lower-case word (e.g. facture)"
+
+[variables.shape]
+kind = "stringChoice"
+value = ["aggregate", "read-model", "gateway"]
+description = "Slice shape: aggregate (create/delete, repository), read-model (query only over an existing table), gateway (calls an external service). Without database only gateway"
+
+[variables.create-table]
+kind = "bool"
+value = true
+description = "Create the <name>.<entity> table and seed it with sample rows (ignored without database)"
+
+# Every matching prefix must hold: the create-table files need both their
+# own condition and the persistence prefix.
+[conditions]
+"modules/[[.Name]]/internal/infra/persistence/migrations/scripts/[[.TimestampCreate]]_create-[[.Entity]].sql" = '[[if and .CreateTable (ne .Shape "gateway")]]true[[end]]'
+"modules/[[.Name]]/internal/infra/persistence/migrations/scripts/[[.TimestampSeed]]_seed-[[.Entity]].sql" = '[[if and .CreateTable (ne .Shape "gateway")]]true[[end]]'
+"modules/[[.Name]]/internal/infra/persistence/" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/outbound/persistence/" = "[[if .Database]]true[[end]]"
+"modules/[[.Name]]/internal/adapters/outbound/persistence/postgres/[[.Entity]]_repository.go" = '[[if ne .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/adapters/outbound/persistence/postgres/[[.Entity]]_repository_test.go" = '[[if ne .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/adapters/outbound/persistence/postgres/[[.Entity]]_row.go" = '[[if ne .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/adapters/outbound/persistence/postgres/[[.Entity]]_row_test.go" = '[[if ne .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/adapters/inbound/mapper/[[.Entity]].go" = '[[if ne .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/adapters/inbound/mapper/[[.Entity]]_test.go" = '[[if ne .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/application/ports/[[.Entity]]_repository.go" = '[[if ne .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/application/query/" = '[[if ne .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/application/command/" = '[[if ne .Shape "read-model"]]true[[end]]'
+"modules/[[.Name]]/internal/application/command/[[.Entity]]_delete.go" = '[[if ne .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/application/command/[[.Entity]]_delete_test.go" = '[[if ne .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/domain/[[.Entity]]/snapshot.go" = '[[if eq .Shape "aggregate"]]true[[end]]'
+"modules/[[.Name]]/internal/domain/[[.Entity]]/events.go" = '[[if ne .Shape "read-model"]]true[[end]]'
+"modules/[[.Name]]/internal/application/ports/[[.Entity]]_gateway.go" = '[[if eq .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/application/command/[[.Entity]]_send.go" = '[[if eq .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/application/command/[[.Entity]]_send_test.go" = '[[if eq .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/adapters/outbound/gateway/" = '[[if eq .Shape "gateway"]]true[[end]]'
+"modules/[[.Name]]/internal/adapters/outbound/events/[[.Entity]]_events" = '[[if ne .Shape "read-model"]]true[[end]]'
+"modules/[[.Name]]/internal/adapters/inbound/connect/" = "[[if .Grpc]]true[[end]]"

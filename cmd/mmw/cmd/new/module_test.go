@@ -31,9 +31,27 @@ func TestOrderVars(t *testing.T) {
 
 	t.Run("database, create-table and grpc follow entity in that order", func(t *testing.T) {
 		m := &goplt.Manifest{Variables: []goplt.Variable{
-			{Name: "CreateTable"}, {Name: "Database"}, {Name: "Entity"}, {Name: "Grpc"}, {Name: "Name"},
+			{Name: "CreateTable"}, {Name: "Database"}, {Name: "Shape"}, {Name: "Entity"}, {Name: "Grpc"}, {Name: "Name"},
 		}}
 		orderVars(m)
-		assert.Equal(t, []string{"Name", "Entity", "Database", "CreateTable", "Grpc"}, names(m))
+		assert.Equal(t, []string{"Name", "Entity", "Database", "Shape", "CreateTable", "Grpc"}, names(m))
+	})
+}
+
+func TestForceGatewayWithoutDatabase(t *testing.T) {
+	t.Run("database false forces gateway over the preselected aggregate", func(t *testing.T) {
+		vars := map[string]any{"Database": false, "Shape": "aggregate"}
+		forceGatewayWithoutDatabase(vars)
+		assert.Equal(t, "gateway", vars["Shape"])
+	})
+	t.Run("database true leaves the shape untouched", func(t *testing.T) {
+		vars := map[string]any{"Database": true, "Shape": "read-model"}
+		forceGatewayWithoutDatabase(vars)
+		assert.Equal(t, "read-model", vars["Shape"])
+	})
+	t.Run("absent Database leaves the shape untouched", func(t *testing.T) {
+		vars := map[string]any{"Shape": "read-model"}
+		forceGatewayWithoutDatabase(vars)
+		assert.Equal(t, "read-model", vars["Shape"])
 	})
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 
 	"github.com/piprim/mmw/pkg/scaffold"
 	"github.com/spf13/cobra"
@@ -12,17 +13,23 @@ import (
 func NewCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "new",
-		Short: "Scaffold a new module",
+		Short: "Scaffold a new module or slice",
 	}
 	cmd.AddCommand(NewModuleCmd())
+	cmd.AddCommand(NewEntityCmd())
 
 	return cmd
 }
 
-// selectTemplateFS returns the embedded FS (default) or an OS directory FS.
-func selectTemplateFS(templatePath string) (fs.FS, error) {
+// selectTemplateFS returns the embedded FS for sub ("module" or "slice") by
+// default, or the sub directory of an external template path.
+func selectTemplateFS(templatePath, sub string) (fs.FS, error) {
 	if templatePath == "" {
-		return scaffold.EmbeddedFS(), nil
+		if sub == "slice" {
+			return scaffold.SliceFS(), nil
+		}
+
+		return scaffold.ModuleFS(), nil
 	}
 	info, err := os.Stat(templatePath)
 	if err != nil {
@@ -32,5 +39,5 @@ func selectTemplateFS(templatePath string) (fs.FS, error) {
 		return nil, fmt.Errorf("template path %q is not a directory", templatePath)
 	}
 
-	return os.DirFS(templatePath), nil
+	return os.DirFS(filepath.Join(templatePath, sub)), nil
 }
