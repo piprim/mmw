@@ -61,7 +61,7 @@ func TestBoamodelMatchesBungen(t *testing.T) {
 		t.Run(name+".go matches bungen", func(t *testing.T) {
 			got := filepath.Join(out, name+".go")
 			cmd := exec.CommandContext(ctx, bungen[0], append(bungen[1:], "model", "-c", dsn, "-t", "facturation.event,facturation.facture", "-f",
-				"--tag", "boa", "--presence", "-o", got, "--template", filepath.Join(mod, boamodelRel, name+".go.tmpl"))...)
+				"--tag", "boa", "--presence", "-p", "boamodel", "-o", got, "--template", filepath.Join(mod, boamodelRel, name+".go.tmpl"))...)
 			output, err := cmd.CombinedOutput()
 			require.NoError(t, err, string(output))
 
@@ -99,7 +99,7 @@ func TestBoamodelMatchesBungen(t *testing.T) {
 
 		got := filepath.Join(t.TempDir(), "models.go")
 		output, err := exec.CommandContext(ctx, bungen[0], append(bungen[1:], "model", "-c", dsn, "-t", string(match[1]), "-f",
-			"--tag", "boa", "--presence", "-o", got, "--template", filepath.Join(mod, boamodelRel, "models.go.tmpl"))...).CombinedOutput()
+			"--tag", "boa", "--presence", "-p", "boamodel", "-o", got, "--template", filepath.Join(mod, boamodelRel, "models.go.tmpl"))...).CombinedOutput()
 		require.NoError(t, err, string(output))
 
 		actual, err := os.ReadFile(got)
