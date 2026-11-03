@@ -211,7 +211,7 @@ func printNextSteps(name string, vars map[string]any, report scaffold.SliceRepor
 	successC.Printf("\n✓ Module %q generated in modules/%s/\n", name, name)
 	warnC.Println("Next:")
 	infoC.Println("  - mise run stow                              (scripts/common, .golangci.yml)")
-	infoC.Println("  - add to initModules in cmd/cpro/main.go:")
+	infoC.Println("  - add to initModules in the application's main.go:")
 	fields := "EventBus: eventBus, Subscriber: rawBus,"
 	if database {
 		fields = "DBPool: dbPool, " + fields

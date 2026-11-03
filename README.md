@@ -753,16 +753,15 @@ seed migrations, ignored for `gateway`. The three paths are detected, never aske
 `[[.PlatformPath]]`.
 
 `database` and `grpc` shape the module, `shape` the slice. `shape=aggregate` is
-`modules/core` without todo, employe and web: one aggregate slice
-(`Get<Entity>`, `Delete<Entity>`), boa repository, outbox, migrations.
+one aggregate slice (`Get<Entity>`, `Delete<Entity>`), boa repository, outbox,
+migrations.
 `shape=read-model` is a query-only slice over an existing table.
 `shape=gateway` (the only shape of a `database=false` module) is a gateway slice:
 `Send<Entity>` validates a label, POSTs it to an HTTP provider
 (`adapters/outbound/gateway`) and publishes `<Entity>SentEvent` straight to
 the bus (no outbox, at-most-once). `grpc=false` drops the Connect handler, the
-HTTP server and `cmd/<name>`: the module is in-proc only, like
-`modules/notifications`, and `cmd/cpro` wires it. `create-table` is ignored
-without a database.
+HTTP server and `cmd/<name>`: the module is in-proc only and the
+application's `main` wires it. `create-table` is ignored without a database.
 
 With a database, the `dao/boamodel` ships pre-rendered; `go test -tags integration ./pkg/scaffold/`
 (Docker, and the repository's `tools/bungen` fork or `BUNGEN`) proves it equals bungen's output, and
@@ -771,8 +770,8 @@ With a database, the `dao/boamodel` ships pre-rendered; `go test -tags integrati
 goose's `<name>.goose_db_version` lives in the module schema and bungen has no
 exclude flag; a new table is added to that list (`mmw new entity` appends it).
 The task runs the repository's bungen fork with
-`go run {{config_root}}/../../tools/bungen/main.go model …`, as `core` does
-through its `tools/bungen` symlink: upstream bungen on `PATH` has no
+`go run {{config_root}}/../../tools/bungen/main.go model …`: upstream bungen
+on `PATH` has no
 `--template`/`--presence` and would emit its default full output into all
 three files.
 
@@ -809,7 +808,7 @@ module path, then:
 1. renders `modules/<name>/`, `contracts/proto/<name>/v1/<entity>.proto`, `contracts/proto/<name>/v1/errors.proto` and `contracts/buf.gen.<name>.yaml`
 2. adds the module to `go.work` and the root `mise.toml`
 3. runs `mise run buf:generate` (root), `go mod tidy` (module), `go work sync` (root), stopping at the first failure and keeping the files
-4. prints the `initModules` snippet for `cmd/cpro/main.go` (it omits `DBPool` and `AuthSvc` when the shape has no database or no gRPC) and the next commands (`mise run stow`, `db:migrate:up`, `arch:check`, `lint`, `test:unit`)
+4. prints the `initModules` snippet for the application's `main.go` (it omits `DBPool` and `AuthSvc` when the shape has no database or no gRPC) and the next commands (`mise run stow`, `db:migrate:up`, `arch:check`, `lint`, `test:unit`)
 
 Names follow `^[a-z][a-z0-9]*$`; neither may be a Go keyword, the name may not
 be a common Postgres reserved word, and the entity may not be a generated
@@ -866,14 +865,10 @@ read by `DomainErrorFor`),
 `test/contract/<entity>_test.go`) carry the entity-specific code; the module's
 error codes live in `errors.proto`.
 
-**Fallback.** A file without its marker is not an error: hand-written modules
-(`core`, `auth`, `notifications`) get the slice files, and the "Next" block
+**Fallback.** A file without its marker is not an error: a hand-written module
+without markers gets the slice files, and the "Next" block
 prints each snippet it could not insert ("Not wired: add to <file> before
 <marker>:") plus the `-t` table to add to the bungen list in `mise.toml`.
-`modules/core/cmd/migration/migrate.go` still imports core's root package,
-which imports the postgres adapter: a slice added to core cannot have its
-table migrated until that command is decoupled like the generated one (it
-must take the schema from `internal/infra/persistence/migrations`).
 
 **Red until generated.** An `aggregate` or `read-model` slice does not compile
 (`postgres/<entity>_*`) until you run `mise run db:migrate:up` and
@@ -993,7 +988,7 @@ For a single module:
 4. Runs `go work sync` at the workspace root.
 
 ```bash
-mmw workspace sync modules/auth          # sync auth's HEAD into its dependents
+mmw workspace sync modules/<name>        # sync that module's HEAD into its dependents
 mmw workspace sync --all                 # sync every module in declaration order
 ```
 
