@@ -69,7 +69,7 @@ func TestRenderSnippets(t *testing.T) {
 				s := byMarker[scaffold.MarkerHandler]
 				assert.Equal(t, "facturation.go", s.Path)
 				assert.Contains(t, s.Text,
-					"mount(facturationv1connect.NewFactureServiceHandler(connecthandler.NewFactureHandler(m.facture), interceptors))")
+					"mount(facturationv1connect.NewFactureServiceHandler(\n\tconnecthandler.NewFactureHandler(m.facture), interceptors))")
 				assert.Contains(t, s.Text, `health["facture"] = m.facture.Health`)
 				assert.Contains(t, s.Text, "names = append(names, facturationv1connect.FactureServiceName)")
 			})

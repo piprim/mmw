@@ -838,7 +838,7 @@ mmw new entity --module facturation          # TUI asks for entity and shape
 mmw new entity                               # TUI picks the module from modules/*/
 ```
 
-`[MODULE]` or `--module` names the module; without it a picker lists
+`[MODULE]`, `--module` or `--var module=` names the module; without it a picker lists
 `modules/*/`. `database` (is there `internal/infra/persistence/`) and `grpc` (is
 there `cmd/<name>/`) are detected from the module tree, never asked. The shape
 list is narrowed: without a database only `gateway`; the default is `gateway`

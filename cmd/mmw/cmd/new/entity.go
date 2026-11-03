@@ -1,6 +1,7 @@
 package new
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -60,7 +61,7 @@ module/ and slice/ subdirectories.
 func runNewEntity(ctx context.Context, positional, moduleFlag, templatePath string, varFlags []string) error {
 	root := platform.RootRepo()
 
-	name, err := resolveModule(root, positional, moduleFlag)
+	name, sliceFlags, err := resolveModule(positional, moduleFlag, varFlags)
 	if err != nil {
 		return err
 	}
@@ -87,7 +88,7 @@ func runNewEntity(ctx context.Context, positional, moduleFlag, templatePath stri
 	}
 	narrowShapes(m, traits.Database)
 
-	vars, err := collectVars(m, varFlags)
+	vars, err := collectVars(m, sliceFlags)
 	if err != nil {
 		return err
 	}
@@ -151,26 +152,30 @@ func askModule(root string, m *goplt.Manifest) (string, error) {
 	return "", errors.New("slice manifest has no Module variable")
 }
 
-// resolveModule returns the module name: the flag wins over the positional
-// argument, and a path is reduced to its base name. Empty means "ask".
-//
-//nolint:unparam // the error result is part of the planned signature
-func resolveModule(_, positional, flag string) (string, error) {
-	v := firstNonEmpty(flag, positional)
-	v = strings.TrimRight(v, "/")
+// resolveModule returns the module name and the --var flags without it:
+// --module wins over the positional argument, which wins over --var module=,
+// and a path (modules/x/, ., ..) is reduced to its base name. Empty means
+// "ask".
+func resolveModule(positional, flag string, varFlags []string) (name string, rest []string, err error) {
+	var fromVar string
+	for _, f := range varFlags {
+		if k, v, ok := strings.Cut(f, "="); ok && goplt.NormalizeKey(k) == moduleVar {
+			fromVar = v
+
+			continue
+		}
+		rest = append(rest, f)
+	}
+	v := cmp.Or(flag, positional, fromVar)
 	if v == "" {
-		return "", nil
+		return "", rest, nil
+	}
+	abs, err := filepath.Abs(v)
+	if err != nil {
+		return "", rest, fmt.Errorf("module %q: %w", v, err)
 	}
 
-	return filepath.Base(v), nil
-}
-
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
-	}
-
-	return b
+	return filepath.Base(abs), rest, nil
 }
 
 // listModules lists the directories under modules/ holding <dir>.go, sorted.

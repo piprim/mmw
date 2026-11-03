@@ -128,6 +128,9 @@ func collectVars(m *goplt.Manifest, varFlags []string) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("--var: %w", err)
 	}
+	if database, ok := given["Database"].(bool); ok {
+		narrowShapes(m, database) // the TUI offers only what Validate accepts
+	}
 
 	if len(scaffold.MissingRequired(m, given)) == 0 {
 		return given, nil
@@ -241,7 +244,7 @@ func printSliceNext(name string, vars map[string]any, report scaffold.SliceRepor
 	database, _ := vars["Database"].(bool)
 	switch {
 	case shape != scaffold.ShapeGateway:
-		infoC.Printf("  - cd modules/%s && mise run db:migrate:up && mise run boa:generate\n", name)
+		infoC.Printf("  - cd modules/%s && mise run db:migrate:up && mise run boa:generate   (compiles only after)\n", name)
 	case database:
 		infoC.Printf("  - cd modules/%s && mise run db:migrate:up   (outbox table)\n", name)
 	}

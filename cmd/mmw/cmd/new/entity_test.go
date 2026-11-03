@@ -13,19 +13,38 @@ import (
 
 func TestResolveModule(t *testing.T) {
 	t.Run("flag wins over the positional argument", func(t *testing.T) {
-		got, err := resolveModule("/r", "a", "b")
+		got, _, err := resolveModule("a", "b", nil)
 		require.NoError(t, err)
 		assert.Equal(t, "b", got)
 	})
 
 	t.Run("accepts a path to the module directory", func(t *testing.T) {
-		got, err := resolveModule("/r", "modules/facturation/", "")
+		got, _, err := resolveModule("modules/facturation/", "", nil)
 		require.NoError(t, err)
 		assert.Equal(t, "facturation", got)
 	})
 
+	t.Run("resolves . to the current directory", func(t *testing.T) {
+		got, _, err := resolveModule(".", "", nil)
+		require.NoError(t, err)
+		assert.Equal(t, "new", got)
+	})
+
+	t.Run("takes --var module= and strips it from the flags", func(t *testing.T) {
+		got, rest, err := resolveModule("", "", []string{"entity=avoir", "module=facturation"})
+		require.NoError(t, err)
+		t.Run("name", func(t *testing.T) { assert.Equal(t, "facturation", got) })
+		t.Run("flags", func(t *testing.T) { assert.Equal(t, []string{"entity=avoir"}, rest) })
+	})
+
+	t.Run("positional wins over --var module=", func(t *testing.T) {
+		got, _, err := resolveModule("a", "", []string{"module=b"})
+		require.NoError(t, err)
+		assert.Equal(t, "a", got)
+	})
+
 	t.Run("empty means ask", func(t *testing.T) {
-		got, err := resolveModule("/r", "", "")
+		got, _, err := resolveModule("", "", nil)
 		require.NoError(t, err)
 		assert.Empty(t, got)
 	})

@@ -17,6 +17,7 @@ type [[.Name | pascal]]Event struct {
 	OccurredAt  time.Time              `boa:"occurred_at,notnull,default:now()"`
 	PublishedAt presence.Of[time.Time] `boa:"published_at"`
 }
+[[- if ne .Shape "gateway"]]
 
 type [[.Name | pascal]][[.Entity | pascal]] struct {
 	boa.BaseModel `boa:"table:[[.Name]].[[.Entity]],alias:t"`
@@ -26,3 +27,4 @@ type [[.Name | pascal]][[.Entity | pascal]] struct {
 	CreatedAt time.Time `boa:"created_at,notnull,default:now()"`
 	UpdatedAt time.Time `boa:"updated_at,notnull,default:now()"`
 }
+[[- end]]

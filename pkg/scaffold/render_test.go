@@ -600,10 +600,25 @@ func TestRenderImportOrder(t *testing.T) {
 	} {
 		t.Run(s.String(), func(t *testing.T) {
 			dir := renderWith(t, s.vars())
+			wireSlice(t, dir, s.vars())
 			assertNoLeftoverActions(t, dir)
 			assertGofmt(t, dir)
 			assertLineLength(t, dir, maxLineLength)
 		})
+	}
+}
+
+// wireSlice inserts the slice's snippets at the module's markers, as AddSlice
+// does, without renaming the fixture's migration stamps.
+func wireSlice(t *testing.T, dir string, vars map[string]any) {
+	t.Helper()
+	snippets, err := scaffold.RenderSnippets(vars)
+	require.NoError(t, err)
+	name, _ := vars["Name"].(string)
+	for _, s := range snippets {
+		ok, err := scaffold.InsertBefore(filepath.Join(dir, "modules", name, s.Path), s.Marker, s.Text)
+		require.NoError(t, err, s.Path)
+		require.True(t, ok, "%s has no marker %s", s.Path, s.Marker)
 	}
 }
 

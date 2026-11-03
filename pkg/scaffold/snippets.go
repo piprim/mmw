@@ -33,8 +33,9 @@ var snippetSources = []snippetSource{
 	{rootFile, MarkerWire, "m.[[.Entity]] = new[[.Entity | pascal]]Service(cfg, infra)", never},
 	{
 		rootFile, MarkerHandler,
-		"mount([[.Name]]v1connect.New[[.Entity | pascal]]ServiceHandler(" +
-			"connecthandler.New[[.Entity | pascal]]Handler(m.[[.Entity]]), interceptors))\n" +
+		// Two lines: one would pass lll only for short module and entity names.
+		"mount([[.Name]]v1connect.New[[.Entity | pascal]]ServiceHandler(\n" +
+			"\tconnecthandler.New[[.Entity | pascal]]Handler(m.[[.Entity]]), interceptors))\n" +
 			`health["[[.Entity]]"] = m.[[.Entity]].Health` + "\n" +
 			"names = append(names, [[.Name]]v1connect.[[.Entity | pascal]]ServiceName)",
 		func(_ string, grpc bool) bool { return !grpc },

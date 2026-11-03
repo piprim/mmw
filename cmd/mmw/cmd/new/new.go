@@ -31,13 +31,14 @@ func selectTemplateFS(templatePath, sub string) (fs.FS, error) {
 
 		return scaffold.ModuleFS(), nil
 	}
-	info, err := os.Stat(templatePath)
+	dir := filepath.Join(templatePath, sub)
+	info, err := os.Stat(dir)
 	if err != nil {
-		return nil, fmt.Errorf("template path %q: %w", templatePath, err)
+		return nil, fmt.Errorf("template path %q: %w", dir, err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("template path %q is not a directory", templatePath)
+		return nil, fmt.Errorf("template path %q is not a directory", dir)
 	}
 
-	return os.DirFS(filepath.Join(templatePath, sub)), nil
+	return os.DirFS(dir), nil
 }

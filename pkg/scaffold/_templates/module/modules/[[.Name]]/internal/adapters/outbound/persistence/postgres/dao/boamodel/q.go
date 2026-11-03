@@ -17,9 +17,11 @@ var Q = struct {
 	[[.Name | pascal]]Event struct {
 		ID, EventType, Payload, OccurredAt, PublishedAt boa.Ident
 	}
+[[- if ne .Shape "gateway"]]
 	[[.Name | pascal]][[.Entity | pascal]] struct {
 		ID, Label, CreatedAt, UpdatedAt boa.Ident
 	}
+[[- end]]
 }{
 	[[.Name | pascal]]Event: struct {
 		ID, EventType, Payload, OccurredAt, PublishedAt boa.Ident
@@ -30,6 +32,7 @@ var Q = struct {
 		OccurredAt:  "t.occurred_at",
 		PublishedAt: "t.published_at",
 	},
+[[- if ne .Shape "gateway"]]
 	[[.Name | pascal]][[.Entity | pascal]]: struct {
 		ID, Label, CreatedAt, UpdatedAt boa.Ident
 	}{
@@ -38,4 +41,5 @@ var Q = struct {
 		CreatedAt: "t.created_at",
 		UpdatedAt: "t.updated_at",
 	},
+[[- end]]
 }

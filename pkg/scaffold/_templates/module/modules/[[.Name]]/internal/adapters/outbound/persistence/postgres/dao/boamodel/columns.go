@@ -5,9 +5,11 @@ var Columns = struct {
 	[[.Name | pascal]]Event struct {
 		ID, EventType, Payload, OccurredAt, PublishedAt string
 	}
+[[- if ne .Shape "gateway"]]
 	[[.Name | pascal]][[.Entity | pascal]] struct {
 		ID, Label, CreatedAt, UpdatedAt string
 	}
+[[- end]]
 }{
 	[[.Name | pascal]]Event: struct {
 		ID, EventType, Payload, OccurredAt, PublishedAt string
@@ -18,6 +20,7 @@ var Columns = struct {
 		OccurredAt:  "occurred_at",
 		PublishedAt: "published_at",
 	},
+[[- if ne .Shape "gateway"]]
 	[[.Name | pascal]][[.Entity | pascal]]: struct {
 		ID, Label, CreatedAt, UpdatedAt string
 	}{
@@ -26,15 +29,18 @@ var Columns = struct {
 		CreatedAt: "created_at",
 		UpdatedAt: "updated_at",
 	},
+[[- end]]
 }
 
 var Tables = struct {
 	[[.Name | pascal]]Event struct {
 		Name, Alias string
 	}
+[[- if ne .Shape "gateway"]]
 	[[.Name | pascal]][[.Entity | pascal]] struct {
 		Name, Alias string
 	}
+[[- end]]
 }{
 	[[.Name | pascal]]Event: struct {
 		Name, Alias string
@@ -42,10 +48,12 @@ var Tables = struct {
 		Name:  "[[.Name]].event",
 		Alias: "t",
 	},
+[[- if ne .Shape "gateway"]]
 	[[.Name | pascal]][[.Entity | pascal]]: struct {
 		Name, Alias string
 	}{
 		Name:  "[[.Name]].[[.Entity]]",
 		Alias: "t",
 	},
+[[- end]]
 }
