@@ -39,11 +39,11 @@ func New(infra Infrastructure) (*Module, error) {
 	// Handle err
 
 	// newApplicationService builds the infrastructure adapters (repository, outbox dispatcher,
-	// unit of work) and wires them into the TodoApplicationService.
-	todoService := newApplicationService(infra)
+	// unit of work) and wires them into the InvoiceApplicationService.
+	invoiceService := newApplicationService(infra)
 
 	// newEventRouter creates the Watermill message router and registers all inbound event
-	// handlers for the Todo module.
+	// handlers for the billing module.
 	router, err := newEventRouter(infra)
 	// Handle err
 
@@ -51,15 +51,15 @@ func New(infra Infrastructure) (*Module, error) {
 	// platform middlewares by the platform), inject an token validator, wraps with an error
 	// logging interceptor handling domain errors,
 	// then returns a pre-configured HTTPServer ready to be started.
-	httpServer := newHTTPServer(cfg, infra, todoService)
+	httpServer := newHTTPServer(cfg, infra, invoiceService)
 
 	return &Module{
-		// Outbox relay: polls todo.event every 2 s and forwards rows to the SystemEventBus.
+		// Outbox relay: polls billing.event every 2 s and forwards rows to the SystemEventBus.
 		relay:   pfoutbox.NewEventsRelay(infra.DBPool, infra.EventBus, infra.Logger, relayTableName),
 		server:  httpServer,
 		router:  router,
 		logger:  infra.Logger,
-		service: todoService,
+		service: invoiceService,
 	}, nil
 }
 
@@ -85,7 +85,7 @@ func (m *Module) Start(ctx context.Context) error {
 		})
 	}
 
-	// Start the Watermill message router triggering Todo module handlers for inbound event handlers.
+	// Start the Watermill message router triggering billing module handlers for inbound event handlers.
 	g.Go(func() error {
 		return m.router.Run(gCtx)
 	})
@@ -126,7 +126,7 @@ func main() {
 	// Creates the in-process Watermill GoChannel and wraps it in the
 	// platform SystemEventBus interface.
 	// rawBus is the concrete GoChannel used directly by modules that need a
-	// message.Subscriber (e.g. the todo module's event router, the notifications
+	// message.Subscriber (e.g. the billing module's event router, the mailer
 	// module). eventBus is the publishing interface passed to every module so they
 	// can emit domain events without depending on the Watermill type.
 	rawBus := getRawbus(logger)
@@ -149,9 +149,9 @@ func main() {
 
 // initModules wires and returns all application modules in dependency order.
 //
-// Ordering matters: auth must be initialised before todo because todo's Connect
-// handler requires an AuthPrivateService to validate JWT tokens. Notifications
-// subscribes to topics from both auth and todo, so it is initialised last.
+// Ordering matters: auth must be initialised before billing because billing's
+// Connect handler requires an AuthPrivateService to validate JWT tokens. Mailer
+// subscribes to topics from both auth and billing, so it is initialised last.
 func initModules(
 	logger *slog.Logger,
 	dbPool *pgxpool.Pool,
@@ -166,34 +166,33 @@ func initModules(
 	})
 	// Handle error
 
-	// 2. Todo — depends on auth's private service to validate bearer tokens.
-	todoModule, err := todo.New(todo.Infrastructure{
+	// 2. Billing — depends on auth's private service to validate bearer tokens.
+	billingModule, err := billing.New(billing.Infrastructure{
 		DBPool:     dbPool,
 		EventBus:   eventBus,
 		Subscriber: rawBus,
-		Logger:     logger.With("module", todo.ModuleName),
+		Logger:     logger.With("module", billing.ModuleName),
 		AuthSvc:    authModule.PrivateService(),
 	})
 	// Handle error
 
-	// 3. Notifications — subscribes to domain events from both auth and todo.
+	// 3. Mailer — subscribes to domain events from both auth and billing.
 	//    The topic list is built by merging the two modules' exported topic slices.
-	notifModule, err := notifications.New(notifications.Infrastructure{
-		Subscriber:  rawBus,
-		Logger:      logger.With("module", notifications.ModuleName),
-		Topics:      append(tododef.Topics, authdef.Topics...),
-		WithNotifer: true,
+	mailerModule, err := mailer.New(mailer.Infrastructure{
+		Subscriber: rawBus,
+		Logger:     logger.With("module", mailer.ModuleName),
+		Topics:     append(billingdef.Topics, authdef.Topics...),
 	})
 	// Handle error
 
-	return []pfcore.Module{todoModule, authModule, notifModule}, nil
+	return []pfcore.Module{billingModule, authModule, mailerModule}, nil
 }
 ```
 
 
 ```go
 // platform.New wires modules together and runs them concurrently.
-app := platform.New(logger, []core.Module{todoModule, authModule, notifModule})
+app := platform.New(logger, []core.Module{billingModule, authModule, mailerModule})
 err := app.Run(ctx) // blocks; cancels all modules when ctx is done or one fails
 ```
 
@@ -209,7 +208,7 @@ srv := server.NewHTTPServer(server.HTTPServerInfra{
     Handler:      mux,           // your Connect / HTTP mux
     Logger:       logger,
     HealthFns:    map[string]func(context.Context) (any, error){"db": dbPing},
-    ServiceNames: []string{"todo.v1.TodoService"}, // Needed by gRPC reflection
+    ServiceNames: []string{"billing.v1.InvoiceService"}, // Needed by gRPC reflection
 })
 // srv implements core.Module — can be passed to platform.New
 ```
@@ -362,7 +361,7 @@ eventBus := events.NewWatermillBus(rawGoChannel) // <- publisher
 // …
 
 waterMillRouter.AddConsumerHandler(
-	"todo.on_auth_user_deleted",
+	"billing.on_auth_user_deleted",
 	"auth.user.deleted.v1",
 	rawGoChannel,
 	UserDeletedHandler,
@@ -379,13 +378,13 @@ Instead of publishing directly to the bus, the command handler writes events int
 
 ```
 Command handler (inside a DB transaction)
-  ├── UPDATE todo SET ...          ← domain state
-  └── INSERT INTO todo.event ...  ← outbox row (same tx)
+  ├── UPDATE invoice SET ...          ← domain state
+  └── INSERT INTO billing.event ...  ← outbox row (same tx)
 
 EventsRelay (background, every 2 s)
   ├── SELECT ... FOR UPDATE SKIP LOCKED  ← fetch unpublished rows, lock them
   ├── bus.Publish(eventType, payload)    ← forward to SystemEventBus
-  └── UPDATE todo.event SET published_at = NOW() ← mark done, commit
+  └── UPDATE billing.event SET published_at = NOW() ← mark done, commit
 ```
 
 **Writing to the outbox — `PostgresOutboxDispatcher`:**
@@ -394,10 +393,10 @@ The dispatcher is the write side. It receives `[]domain.DomainEvent` collected d
 
 ```go
 err = c.unitOfWork.WithTransaction(ctx, func(txCtx context.Context) error {
-    if err := c.repository.Save(txCtx, todo); err != nil {  // domain write
+    if err := c.repository.Save(txCtx, invoice); err != nil {  // domain write
         return err
     }
-    return c.eventDispatcher.Dispatch(txCtx, todo.Events()) // outbox write — same tx
+    return c.eventDispatcher.Dispatch(txCtx, invoice.Events()) // outbox write — same tx
 })
 ```
 
@@ -410,7 +409,7 @@ The relay is the read side. It runs as a `core.Module` goroutine, ticking every 
 3. Marks successfully published rows with `published_at = NOW()` and commits.
 
 ```go
-relay := outbox.NewEventsRelay(pool, eventBus, logger, "todo.event")
+relay := outbox.NewEventsRelay(pool, eventBus, logger, "billing.event")
 // relay implements core.Module — pass it to platform.New alongside the HTTP server
 ```
 
@@ -439,9 +438,9 @@ type DBExecutor interface {
 Usage:
 1. `uow.Executor` returns a `DBExecutor`:
    ```go
-   // Save persists a new todo to the database.
-   func (r *PostgresTodoRepository) Save(ctx context.Context, todo *domain.Todo) error {
-   	query := `INSERT INTO todo.todo (…) VALUES (…)`
+   // Save persists a new invoice to the database.
+   func (r *PostgresInvoiceRepository) Save(ctx context.Context, invoice *domain.Invoice) error {
+   	query := `INSERT INTO billing.invoice (…) VALUES (…)`
    	_, err := r.uow.Executor(ctx).Exec(ctx, query, pgx.NamedArgs(/* … */))
 
    	return err
@@ -452,12 +451,12 @@ Usage:
 // Execute Infrastructure operations within the Unit of Work so with transaction.
 err = c.unitOfWork.WithTransaction(ctx, func(txCtx context.Context) error {
 	// Use txCtx here so the repository uses the transaction if any!
-	if err := c.repository.Save(txCtx, todo); err != nil {
-		return eris.Wrap(err, "saving todo")
+	if err := c.repository.Save(txCtx, invoice); err != nil {
+		return eris.Wrap(err, "saving invoice")
 	}
 
 	// Dispatch events using txCtx (e.g., saving to an Outbox table in the same DB)
-	if err := c.eventDispatcher.Dispatch(txCtx, todo.Events()); err != nil {
+	if err := c.eventDispatcher.Dispatch(txCtx, invoice.Events()); err != nil {
 		return eris.Wrap(err, "dispatching events")
 	}
 
@@ -470,7 +469,7 @@ err = c.unitOfWork.WithTransaction(ctx, func(txCtx context.Context) error {
 Define a snapshot struct with `db` tags (one tag per column name):
 
 ```go
-type TodoSnapshot struct {
+type InvoiceSnapshot struct {
     ID          uuid.UUID  `db:"id"`
     Title       string     `db:"title"`
     Description string     `db:"description"`
@@ -484,10 +483,10 @@ type TodoSnapshot struct {
 Pass it to `StructArgs` and cast to `pgx.NamedArgs`:
 
 ```go
-query := `INSERT INTO todo.todo (id, title, description, status, due_date, user_id)
+query := `INSERT INTO billing.invoice (id, title, description, status, due_date, user_id)
           VALUES (@id, @title, @description, @status, @due_date, @user_id)`
 
-_, err := exec.Exec(ctx, query, pgx.NamedArgs(pfdb.StructArgs(todo.Snapshot())))
+_, err := exec.Exec(ctx, query, pgx.NamedArgs(pfdb.StructArgs(invoice.Snapshot())))
 ```
 
 Tag rules:
@@ -553,8 +552,8 @@ connect.WithInterceptors(pfconnect.NewErrorLoggingInterceptor(logger))
 Connect RPC handlers are expected to return `*connect.Error` values (with a gRPC status code) so the framework can serialise the error correctly for the client. This means each handler converts application-layer errors before returning:
 
 ```go
-func (h *TodoHandler) CreateTodo(ctx context.Context, req *connect.Request[...]) (..., error) {
-    todo, err := h.service.CreateTodo(ctx, &appReq)
+func (h *InvoiceHandler) CreateInvoice(ctx context.Context, req *connect.Request[...]) (..., error) {
+    invoice, err := h.service.CreateInvoice(ctx, &appReq)
     if err != nil {
         return nil, connectErrorFrom(err) // wraps into *connect.Error
     }
@@ -595,11 +594,11 @@ Handler returns connectErrorFrom(err)
           (client sees gRPC code + proto detail, never the stack trace)
 ```
 
-The interceptor is registered when building the Connect handler in `todo.go`:
+The interceptor is registered when building the Connect handler in `billing.go`:
 
 ```go
-path, handler := todov1connect.NewTodoServiceHandler(
-    connecthandler.NewTodoHandler(todoService),
+path, handler := billingv1connect.NewInvoiceServiceHandler(
+    connecthandler.NewInvoiceHandler(invoiceService),
     connect.WithInterceptors(pfconnect.NewErrorLoggingInterceptor(infra.Logger)),
 )
 ```
