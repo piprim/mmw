@@ -224,6 +224,12 @@ func (m *Module) Start(ctx context.Context) error {
 [[- end]]
 
 	g.Go(func() error {
+		// Run only returns once the router is closed. Cancelling the context stops the
+		// handlers, but with no handler registered nothing ever closes the router, so the
+		// process would hang on shutdown: close it explicitly.
+		stop := context.AfterFunc(gCtx, func() { _ = m.router.Close() })
+		defer stop()
+
 		return m.router.Run(gCtx)
 	})
 
