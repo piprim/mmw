@@ -547,7 +547,6 @@ func TestRenderMatrix(t *testing.T) {
 			assertFileContains(t, dir, mod+"/internal/infra/config/configs/default.toml", "token = \"fake-token\"")
 			assertFileContains(t, dir, mod+"/internal/infra/config/config.go", "//go:embed configs/*\n")
 			assertFileNotContains(t, dir, mod+"/internal/infra/config/config.go", "var conf *Config")
-			assertFileContains(t, dir, mod+"/internal/infra/config/config.go", "RequireSecret(")
 			assertFileNotContains(t, dir, mod+"/internal/infra/config/config.go", `Password == ""`)
 			if s.database {
 				assertFileContains(t, dir, root, "func Migrate(")

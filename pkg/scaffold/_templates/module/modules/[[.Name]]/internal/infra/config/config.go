@@ -64,14 +64,5 @@ func Load(ctx context.Context, envPrefix string) (*Config, error) {
 		return nil, eris.Wrap(err, "error filling config")
 	}
 
-	var gatewayToken string
-	if conf.Gateway != nil {
-		gatewayToken = conf.Gateway.Token
-	}
-
-	if err := pfconfig.RequireSecret(conf.Environment, "gateway token", gatewayToken, SecretPlaceholders...); err != nil {
-		return nil, eris.Wrap(err, "invalid configuration")
-	}
-
 	return conf, nil
 }

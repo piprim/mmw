@@ -107,14 +107,5 @@ func TestLoad(t *testing.T) {
 		_, err := Load(context.Background(), "")
 		assert.NoError(t, err)
 	})
-
-	t.Run("refuses a missing gateway token", func(t *testing.T) {
-		withConfigFS(t, fstest.MapFS{"configs/default.toml": {Data: []byte("log-level=\"debug\"\n")}})
-		t.Setenv("APP_ENV", "development")
-		t.Setenv("GATEWAY_TOKEN", "")
-
-		_, err := Load(context.Background(), "")
-		assert.ErrorIs(t, err, pfconfig.ErrSecretEmpty)
-	})
 }
 [[- end]]
