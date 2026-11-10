@@ -8,11 +8,13 @@ host = "localhost"
 port = 5432
 name = "cpro_development"
 sslmode = "disable"
+password = "rcv"
 [[- end]]
 
 [gateway]
 # ponytail: placeholder endpoint; point it at the real provider.
 url = "http://localhost:9999/"
+token = "fake-token"
 [[- if .Grpc]]
 
 [server]
