@@ -22,8 +22,11 @@ func CORSMiddleware(cfg *pfconfig.Server) Middleware {
 		AllowedOrigins: allowed,
 		AllowedMethods: connectcors.AllowedMethods(),
 		AllowedHeaders: connectcors.AllowedHeaders(),
-		ExposedHeaders: append(connectcors.ExposedHeaders(), RenewedTokenHeader),
-		MaxAge:         maxAge,
+		// The session cookie rides on cross-origin calls from our other applications;
+		// the origins are explicit (see Server.Validate), never "*".
+		AllowCredentials: true,
+		ExposedHeaders:   append(connectcors.ExposedHeaders(), RenewedTokenHeader),
+		MaxAge:           maxAge,
 	})
 
 	return func(next http.Handler) http.Handler {

@@ -94,4 +94,18 @@ func TestCORSMiddleware(t *testing.T) {
 
 		assert.Contains(t, rec.Header().Get("Access-Control-Expose-Headers"), RenewedTokenHeader)
 	})
+
+	t.Run("lets the browser send credentials to an allowed origin", func(t *testing.T) {
+		cfg := &pfconfig.Server{AllowedOrigins: []string{"https://app.example.com"}}
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+		req := httptest.NewRequest(http.MethodOptions, "/test", nil)
+		req.Header.Set("Origin", "https://app.example.com")
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		rec := httptest.NewRecorder()
+		CORSMiddleware(cfg)(nextHandler).ServeHTTP(rec, req)
+
+		assert.Equal(t, "https://app.example.com", rec.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, "true", rec.Header().Get("Access-Control-Allow-Credentials"))
+	})
 }

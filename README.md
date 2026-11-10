@@ -261,11 +261,19 @@ middleware.RecoveryMiddleware(logger) Middleware
 
 **`CORSMiddleware`**
 
-Configures CORS using the `rs/cors` library with the allowed methods, headers, and exposed headers required by Connect RPC and gRPC-Web (sourced from `connectrpc.com/cors`). Allowed origins default to `cfg.Host`; the `AllowedOrigins` slice in `config.Server` overrides this.
+Configures CORS using the `rs/cors` library with the allowed methods, headers, and exposed headers required by Connect RPC and gRPC-Web (sourced from `connectrpc.com/cors`). Allowed origins default to `cfg.Host`; the `AllowedOrigins` slice in `config.Server` overrides this. Credentials are allowed, so every origin must be explicit: `config.Server.Validate()` refuses `"*"` and anything that is not a bare `scheme://host[:port]`; call it when loading the config.
 
 ```go
 middleware.CORSMiddleware(cfg *config.Server) Middleware
 // Preflight cache: 7200 s
+```
+
+**`OriginGuard`**
+
+Stops cross-site request forgery now that the browser can send a session cookie by itself. Requests other than GET, HEAD and OPTIONS are refused with 403 when `Sec-Fetch-Site` is `cross-site`, or when `Origin` is not in the allow-list (`config.Server.AllowedOrigins`; sibling subdomains are same-site, so only the list tells them apart). A request marked `same-origin`, or carrying neither header (not a browser), passes. GET requests are never checked and must have no side effect. `server.NewHTTPServer` mounts it right after CORS.
+
+```go
+middleware.OriginGuard(allowedOrigins []string, logger *slog.Logger) Middleware
 ```
 
 **`BearerAuthMiddleware`**

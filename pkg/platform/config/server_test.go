@@ -80,3 +80,32 @@ func TestServer_URL(t *testing.T) {
 		assert.Equal(t, "http://localhost:3000", s.URL("", nil))
 	})
 }
+
+func TestServer_Validate(t *testing.T) {
+	t.Run("accepts explicit origins", func(t *testing.T) {
+		s := &Server{AllowedOrigins: []string{"https://app.example.com", "http://localhost:4200"}}
+
+		assert.NoError(t, s.Validate())
+	})
+
+	t.Run("accepts no origin at all", func(t *testing.T) {
+		assert.NoError(t, (&Server{}).Validate())
+	})
+
+	t.Run("refuses a wildcard, which cannot be combined with credentials", func(t *testing.T) {
+		err := (&Server{AllowedOrigins: []string{"*"}}).Validate()
+
+		assert.ErrorIs(t, err, ErrInvalidAllowedOrigin)
+	})
+
+	t.Run("refuses what is not a bare origin", func(t *testing.T) {
+		for _, bad := range []string{
+			"app.example.com", "https://app.example.com/", "https://app.example.com/path", "https://", "", "ftp://x.com",
+			"https://app.example.com?x=1", "https://app.example.com#frag", "https://user@app.example.com",
+		} {
+			err := (&Server{AllowedOrigins: []string{bad}}).Validate()
+
+			assert.ErrorIs(t, err, ErrInvalidAllowedOrigin, bad)
+		}
+	})
+}

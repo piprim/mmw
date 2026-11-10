@@ -1,9 +1,15 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"net/url"
 	"time"
 )
+
+// ErrInvalidAllowedOrigin is returned when an allowed origin is not a bare
+// origin (scheme://host[:port]) or is the "*" wildcard.
+var ErrInvalidAllowedOrigin = errors.New("invalid allowed origin")
 
 const (
 	readHeaderTimeout = 5 * time.Second
@@ -37,6 +43,21 @@ func (s *Server) SetDefaults() {
 	if s.ShutdownTimeout == 0 {
 		s.ShutdownTimeout = shutdownTimeout
 	}
+}
+
+// Validate rejects allowed origins the platform cannot enforce: the CORS and
+// origin checks send credentials, so each origin must be explicit, bare
+// (scheme://host[:port], no path or trailing slash) and never "*".
+func (s *Server) Validate() error {
+	for _, origin := range s.AllowedOrigins {
+		u, err := url.Parse(origin)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+			u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+			return fmt.Errorf("%w: %q must look like https://app.example.com", ErrInvalidAllowedOrigin, origin)
+		}
+	}
+
+	return nil
 }
 
 func (s *Server) URL(path string, queries map[string]string) string {
