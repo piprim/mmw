@@ -9,7 +9,7 @@
 //
 //  1. Load configs/default.toml (required)
 //  2. Load configs/<APP_ENV>.toml (optional, based on APP_ENV environment variable)
-//  3. Apply environment variables (highest priority)
+//  3. Apply environment variables (override TOML when set)
 //
 // # Usage
 //

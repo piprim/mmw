@@ -7,6 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/sethvargo/go-envconfig"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +27,7 @@ type TestConfig struct {
 
 type TestDatabase struct {
 	User     string `mapstructure:"user"`
-	Password string `env:"DB_PASSWORD, required"`
+	Password string `env:"DB_PASSWORD"`
 	Host     string `mapstructure:"host"`
 	Port     string `mapstructure:"port"`
 	Name     string `mapstructure:"name"`
@@ -100,12 +101,33 @@ func TestContext_Fill(t *testing.T) {
 			assert.Error(t, err, "Fill() should return error when APP_ENV is missing")
 		})
 
-		t.Run("missing DB_PASSWORD", func(t *testing.T) {
-			setEnv(t, map[string]string{"APP_ENV": "test"})
+	})
+
+	pwFS := func() fstest.MapFS {
+		return fstest.MapFS{"configs/default.toml": &fstest.MapFile{Data: []byte("[database]\nuser = \"rcv\"\npassword = \"from-toml\"\n")}}
+	}
+	fillPw := func(t *testing.T, env map[string]string) string {
+		t.Helper()
+		resetViper()
+		t.Cleanup(resetViper)
+		env["APP_ENV"] = "development"
+		setEnv(t, env)
+		if _, ok := env["DB_PASSWORD"]; !ok {
 			os.Unsetenv("DB_PASSWORD")
-			err := NewContext(context.Background(), mockFS, "").Fill(&TestConfig{})
-			assert.Error(t, err, "Fill() should return error when DB_PASSWORD is missing")
-		})
+		}
+		config := &TestConfig{}
+		require.NoError(t, NewContext(context.Background(), pwFS(), "").Fill(config))
+		return config.Database.Password
+	}
+
+	t.Run("TOML provides the password when the env var is unset", func(t *testing.T) {
+		assert.Equal(t, "from-toml", fillPw(t, map[string]string{}))
+	})
+	t.Run("env var overrides the TOML password", func(t *testing.T) {
+		assert.Equal(t, "from-env", fillPw(t, map[string]string{"DB_PASSWORD": "from-env"}))
+	})
+	t.Run("env var set but empty keeps the TOML password", func(t *testing.T) {
+		assert.Equal(t, "from-toml", fillPw(t, map[string]string{"DB_PASSWORD": ""}))
 	})
 
 	t.Run("succeeds with all variables and loads database config", func(t *testing.T) {
@@ -162,7 +184,7 @@ func TestContext_Fill(t *testing.T) {
 		resetViper()
 		t.Cleanup(resetViper)
 
-		setEnv(t, map[string]string{"DB_PASSWORD": "os_test_password", "APP_ENV": "default"})
+		setEnv(t, map[string]string{"DB_PASSWORD": "os_test_password", "APP_ENV": "testing"})
 
 		config := &TestConfig{}
 		err := NewContext(context.Background(), defaultFS(), "").Fill(config)
@@ -170,7 +192,7 @@ func TestContext_Fill(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, config.Database)
 		assert.Equal(t, "os_test_password", config.Database.Password)
-		assert.Equal(t, "default", config.Environment)
+		assert.Equal(t, "testing", config.Environment)
 		assert.Equal(t, "rcv", config.Database.User)
 		assert.Equal(t, "localhost", config.Database.Host)
 		assert.Equal(t, "4332", config.Database.Port)
@@ -258,7 +280,7 @@ func TestContext_Fill(t *testing.T) {
 		resetViper()
 		t.Cleanup(resetViper)
 
-		setEnv(t, map[string]string{"DB_PASSWORD": "test_password", "APP_ENV": "default"})
+		setEnv(t, map[string]string{"DB_PASSWORD": "test_password", "APP_ENV": "testing"})
 
 		err := NewContext(context.Background(), fstest.MapFS{}, "").Fill(&TestConfig{})
 
@@ -338,25 +360,23 @@ func TestEnvUnmarshal(t *testing.T) {
 	defer resetViper()
 	ctx := context.Background()
 
-	t.Run("with envs map", func(t *testing.T) {
+	t.Run("reads the OS environment", func(t *testing.T) {
 		setEnv(t, map[string]string{
 			"DB_PASSWORD": "secret_pass",
 			"APP_ENV":     "production",
 		})
 
 		config := &TestConfig{}
-		err := envUnmarshal(ctx, config, nil, "")
+		err := envUnmarshal(ctx, config, envconfig.OsLookuper(), false)
 		require.NoError(t, err)
 
 		assert.Equal(t, "production", config.Environment)
 		assert.Equal(t, "secret_pass", config.Database.Password)
 	})
 
-	t.Run("with nil envs uses OS environment", func(t *testing.T) {
-		config := &TestConfig{}
-		err := envUnmarshal(ctx, config, nil, "")
-		if err != nil {
-			t.Logf("envUnmarshal() with nil envs failed as expected: %v", err)
-		}
+	t.Run("missing required APP_ENV errors", func(t *testing.T) {
+		setEnv(t, map[string]string{})
+		os.Unsetenv("APP_ENV")
+		assert.Error(t, envUnmarshal(ctx, &TestConfig{}, envconfig.OsLookuper(), false))
 	})
 }
