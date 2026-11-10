@@ -31,12 +31,12 @@
 //
 // Load configuration using an embedded filesystem:
 //
-//	//go:embed configs/*.toml
+//	//go:embed configs/*
 //	var configFS embed.FS
 //
 //	ctx := context.Background()
 //	cfg := &AppConfig{}
-//	err := config.NewContext(ctx, configFS, nil).Fill(cfg)
+//	err := config.NewContext(ctx, configFS, "").Fill(cfg)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}

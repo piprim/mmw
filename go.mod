@@ -6,6 +6,7 @@ require (
 	connectrpc.com/connect v1.21.1
 	connectrpc.com/cors v0.1.0
 	connectrpc.com/grpcreflect v1.3.1
+	filippo.io/age v1.3.2
 	github.com/ThreeDotsLabs/watermill v1.5.3
 	github.com/fatih/color v1.19.0
 	github.com/google/uuid v1.6.0
@@ -34,6 +35,7 @@ require (
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20261006220739-8c912ac31dd4 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
