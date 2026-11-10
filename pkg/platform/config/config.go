@@ -3,11 +3,22 @@ package config
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 
 	"github.com/sethvargo/go-envconfig"
 	"github.com/spf13/viper"
+)
+
+// LocalOverlay is the optional developer-local file merged last in development.
+const LocalOverlay = "configs/local.toml"
+
+var (
+	// ErrOverlayRequired is returned when a non-development environment has no overlay.
+	ErrOverlayRequired = errors.New("environment overlay is required")
+	// ErrOverlayAmbiguous is returned when both <env>.toml and <env>.toml.age exist.
+	ErrOverlayAmbiguous = errors.New("both <env>.toml and <env>.toml.age exist")
 )
 
 // Context is the context needed to fill a configuration
@@ -53,11 +64,26 @@ func (c *Context) Fill(config Config) error {
 		return fmt.Errorf("viper failed to read the default configuration: %w", err)
 	}
 
-	file := config.GetAppEnv().String() + ".toml"
-	envConfig, err := fs.ReadFile(configFS, "configs/"+file)
-	if err == nil {
-		if err := v.MergeConfig(bytes.NewBuffer(envConfig)); err != nil {
-			return fmt.Errorf("viper failed merging the configuration %s: %w", file, err)
+	env := config.GetAppEnv().String()
+	overlay, err := c.readOverlay(env)
+	if err != nil {
+		return err
+	}
+	if overlay != nil {
+		name := env + ".toml"
+		if _, err := fs.Stat(c.fs, "configs/"+name+".age"); err == nil {
+			name += ".age"
+		}
+		if err := v.MergeConfig(bytes.NewReader(overlay)); err != nil {
+			return fmt.Errorf("viper failed merging the configuration %s: %w", name, err)
+		}
+	}
+
+	if env == EnvironmentDevelopment.String() {
+		if local, err := fs.ReadFile(c.fs, LocalOverlay); err == nil {
+			if err := v.MergeConfig(bytes.NewReader(local)); err != nil {
+				return fmt.Errorf("viper failed merging %s: %w", LocalOverlay, err)
+			}
 		}
 	}
 
@@ -71,6 +97,43 @@ func (c *Context) Fill(config Config) error {
 	}
 
 	return nil
+}
+
+// readOverlay returns the <env> overlay: clear, or decrypted from <env>.toml.age.
+// It returns (nil, nil) when none exists and env is development or testing.
+func (c *Context) readOverlay(env string) ([]byte, error) {
+	clearPath := "configs/" + env + ".toml"
+	encrypted := clearPath + ".age"
+	_, clearErr := fs.Stat(c.fs, clearPath)
+	_, encErr := fs.Stat(c.fs, encrypted)
+
+	switch {
+	case clearErr == nil && encErr == nil:
+		return nil, fmt.Errorf("%w: %s and %s", ErrOverlayAmbiguous, clearPath, encrypted)
+	case clearErr == nil:
+		data, err := fs.ReadFile(c.fs, clearPath)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", clearPath, err)
+		}
+
+		return data, nil
+	case encErr == nil:
+		data, err := fs.ReadFile(c.fs, encrypted)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", encrypted, err)
+		}
+		l := c.lookuper()
+		ids, err := loadIdentities(l, defaultIdentityPaths(l))
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", encrypted, err)
+		}
+
+		return decryptOverlay(encrypted, data, ids)
+	case env == EnvironmentDevelopment.String() || env == EnvironmentTesting.String():
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf("%w: add %s or %s", ErrOverlayRequired, clearPath, encrypted)
 }
 
 // lookuper reads the OS environment, trying the prefixed name first when a prefix is set.

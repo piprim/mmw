@@ -8,8 +8,12 @@
 // The package loads configuration in this order (later sources override earlier):
 //
 //  1. Load configs/default.toml (required)
-//  2. Load configs/<APP_ENV>.toml (optional, based on APP_ENV environment variable)
-//  3. Apply environment variables (override TOML when set)
+//  2. Load configs/<APP_ENV>.toml, or decrypt configs/<APP_ENV>.toml.age with an age
+//     identity (AGE_IDENTITY, AGE_IDENTITY_FILE, $XDG_CONFIG_HOME/age/keys.txt,
+//     $HOME/.config/age/keys.txt, /etc/age/keys.txt). Optional for development and
+//     testing, required (fail closed) for any other environment.
+//  3. In development only, load configs/local.toml (optional)
+//  4. Apply environment variables (override TOML when set)
 //
 // # Usage
 //
