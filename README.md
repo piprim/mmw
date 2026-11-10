@@ -616,15 +616,18 @@ Layered configuration loader that combines embedded TOML files with environment 
 
 **Loading order** (later sources win):
 1. `configs/default.toml` — required baseline
-2. `configs/<APP_ENV>.toml` — optional environment-specific overrides (e.g. `configs/development.toml`)
-3. Environment variables — highest priority, applied last
+2. `configs/<APP_ENV>.toml`, or `configs/<APP_ENV>.toml.age` decrypted with an age identity found at `AGE_IDENTITY`, `AGE_IDENTITY_FILE`, `$XDG_CONFIG_HOME/age/keys.txt` (else `$HOME/.config/age/keys.txt`) or `/etc/age/keys.txt`. Optional for `development` and `testing`; required (fail closed) for every other environment. Having both forms is an error.
+3. `configs/local.toml` — optional, `development` only; a gitignored per-machine override
+4. Environment variables — override TOML values when set (a set-but-empty variable keeps the TOML value)
+
+`RequireSecret(env, name, value, placeholders...)` refuses an empty secret everywhere and a placeholder value outside `development`/`testing`; call it in `Load` for every secret field.
 
 **Defining a module config:**
 
 Embed the TOML files and implement the `Config` interface. `Base` provides a ready-made implementation that reads `APP_ENV` from the environment:
 
 ```go
-//go:embed configs/*.toml
+//go:embed configs/*
 var configFS embed.FS
 
 type Config struct {
