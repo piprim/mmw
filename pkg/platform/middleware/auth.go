@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	pfauthctx "github.com/piprim/mmw/pkg/platform/authctx"
+	"github.com/piprim/mmw/pkg/platform/sessioncookie"
 )
 
 // RenewedTokenHeader is the response header carrying a renewed bearer token.
@@ -27,15 +28,44 @@ type TokenValidation struct {
 // AuthPrivateService (see the todo module's NewTokenValidator adapter).
 type TokenValidator func(ctx context.Context, token string) (TokenValidation, error)
 
-// BearerAuthMiddleware returns a Middleware that enforces bearer-token authentication.
+// AuthOption customises AuthMiddleware.
+type AuthOption func(*authOptions)
+
+type authOptions struct {
+	cookie *sessioncookie.Cookie
+}
+
+// WithSessionCookie makes the middleware accept the token from the session
+// cookie, ahead of the Authorization header, and hand a renewed token back in
+// that cookie when the request came with it.
+func WithSessionCookie(c *sessioncookie.Cookie) AuthOption {
+	return func(o *authOptions) { o.cookie = c }
+}
+
+// BearerAuthMiddleware is AuthMiddleware that reads the token from the Bearer
+// Authorization header only.
+func BearerAuthMiddleware(validate TokenValidator, logger *slog.Logger, excludedPaths []string) Middleware {
+	return AuthMiddleware(validate, logger, excludedPaths)
+}
+
+// AuthMiddleware returns a Middleware that enforces token authentication.
 //
 // For each request it:
 //  1. Skips auth for paths in excludedPaths (or any /debug/ path).
-//  2. Extracts the Bearer token from the Authorization header.
+//  2. Extracts the token: from the session cookie when WithSessionCookie is
+//     given and the cookie is present, otherwise from the Bearer Authorization header.
 //  3. Calls validate; on success it injects the userID via pfauthctx.WithUserID and,
-//     if the token was renewed, sets RenewedTokenHeader on the response.
+//     if the token was renewed, sets RenewedTokenHeader on the response, and the
+//     session cookie too when the token came from it.
 //  4. Returns HTTP 401 with a Connect-compatible JSON body on any failure.
-func BearerAuthMiddleware(validate TokenValidator, logger *slog.Logger, excludedPaths []string) Middleware {
+func AuthMiddleware(
+	validate TokenValidator, logger *slog.Logger, excludedPaths []string, opts ...AuthOption,
+) Middleware {
+	var o authOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			for _, path := range excludedPaths {
@@ -46,7 +76,7 @@ func BearerAuthMiddleware(validate TokenValidator, logger *slog.Logger, excluded
 				}
 			}
 
-			token := extractBearerToken(r)
+			token, fromCookie := o.extractToken(r)
 			if token == "" {
 				writeUnauthorized(w)
 
@@ -63,12 +93,27 @@ func BearerAuthMiddleware(validate TokenValidator, logger *slog.Logger, excluded
 
 			if validation.RenewedToken != "" {
 				w.Header().Set(RenewedTokenHeader, validation.RenewedToken)
+				if fromCookie {
+					o.cookie.Set(w.Header(), validation.RenewedToken)
+				}
 			}
 
 			ctx := pfauthctx.WithUserID(r.Context(), validation.UserID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// extractToken returns the request token and whether it came from the session
+// cookie, which then also receives the renewed token.
+func (o authOptions) extractToken(r *http.Request) (token string, fromCookie bool) {
+	if o.cookie != nil {
+		if token = o.cookie.Token(r.Header); token != "" {
+			return token, true
+		}
+	}
+
+	return extractBearerToken(r), false
 }
 
 func extractBearerToken(r *http.Request) string {
