@@ -238,6 +238,13 @@ func TestRender(t *testing.T) {
 		assertFileNotContains(t, dir, mod+"/mise.toml", "\n  bungen model")
 	})
 
+	t.Run("standalone commands check the database password with RequireSecret", func(t *testing.T) {
+		for _, f := range []string{"/cmd/facturation/main.go", "/cmd/migration/migrate.go"} {
+			assertFileContains(t, dir, mod+f, "RequireSecret(")
+			assertFileNotContains(t, dir, mod+f, `Password == ""`)
+		}
+	})
+
 	t.Run("cmd/migration does not import the module root", func(t *testing.T) {
 		// The root imports the postgres adapter, which does not build until
 		// boa:generate has run on the migrated table.
@@ -535,7 +542,12 @@ func TestRenderMatrix(t *testing.T) {
 			assertFileContains(t, dir, mod+"/internal/testhelpers/fakes.go", "type RecordingEventPublisher struct")
 			assertFileContains(t, dir, mod+"/internal/infra/config/config.go", "Gateway *Gateway")
 			assertFileContains(t, dir, mod+"/internal/infra/config/configs/default.toml", "[gateway]")
-			assertFileContains(t, dir, mod+"/mise.toml", "GATEWAY_TOKEN")
+			assertFileNotContains(t, dir, mod+"/mise.toml", "GATEWAY_TOKEN")
+			assertFileNotContains(t, dir, mod+"/mise.toml", "DB_PASSWORD")
+			assertFileContains(t, dir, mod+"/internal/infra/config/configs/default.toml", "token = \"fake-token\"")
+			assertFileContains(t, dir, mod+"/internal/infra/config/config.go", "//go:embed configs/*\n")
+			assertFileNotContains(t, dir, mod+"/internal/infra/config/config.go", "var conf *Config")
+			assertFileNotContains(t, dir, mod+"/internal/infra/config/config.go", `Password == ""`)
 			if s.database {
 				assertFileContains(t, dir, root, "func Migrate(")
 				assertFileContains(t, dir, root, "DBPool     *pgxpool.Pool")

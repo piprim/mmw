@@ -8,8 +8,8 @@ import (
 type Database struct {
 	Scheme string `mapstructure:"scheme"`
 	User   string `mapstructure:"user"`
-	// Do not export as json and set fron env vars.
-	Password string `env:"DB_PASSWORD" json:"-" mapstructure:"-"`
+	// Never exported as json; from TOML or env var (env wins).
+	Password string `env:"DB_PASSWORD" json:"-" mapstructure:"password"`
 	Host     string `mapstructure:"host"`
 	Port     Port   `mapstructure:"port"`
 	Name     string `mapstructure:"name"`

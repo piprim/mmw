@@ -35,10 +35,8 @@ _.file = ".envrc"
 APP_ENV = { required = true }
 APP_NAME = { required = true }
 [[- if .Database]]
-DB_PASSWORD = "rcv"            # TODO: make it secret
-DB_URL = "postgres://rcv:{{env.DB_PASSWORD}}@localhost:5432/cpro_development?sslmode=disable"
+DB_URL = "postgres://rcv:rcv@localhost:5432/cpro_development?sslmode=disable"
 [[- end]]
-GATEWAY_TOKEN = "dev"            # TODO: make it secret
 
 [tasks.setup]
 description = "Update Repo Deps"

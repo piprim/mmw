@@ -18,6 +18,10 @@ user = "rcv"
 host = "localhost"
 port = 5432
 name = "testdb"
+password = "rcv"
+
+[gateway]
+token = "fake-token"
 `
 
 func withConfigFS(t *testing.T, files fstest.MapFS) {
@@ -43,14 +47,14 @@ func TestLoad(t *testing.T) {
 		assert.Contains(t, cfg.Database.URL(), "secret123")
 	})
 
-	t.Run("fails when the database password is empty", func(t *testing.T) {
+	t.Run("reads the database password from TOML", func(t *testing.T) {
 		withConfigFS(t, fstest.MapFS{"configs/default.toml": {Data: []byte(testDefaultTOML)}})
 		t.Setenv("APP_ENV", "development")
 		t.Setenv("DB_PASSWORD", "")
 
 		cfg, err := Load(context.Background(), "")
-		assert.Nil(t, cfg)
-		assert.ErrorContains(t, err, "database password is empty")
+		require.NoError(t, err)
+		assert.Equal(t, "rcv", cfg.Database.Password)
 	})
 }
 [[- else -]]
@@ -70,6 +74,7 @@ import (
 const testDefaultTOML = `
 [gateway]
 url = "http://localhost:9999/"
+token = "fake-token"
 `
 
 func withConfigFS(t *testing.T, files fstest.MapFS) {
@@ -96,7 +101,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("loads without a gateway url: only a gateway slice needs one", func(t *testing.T) {
-		withConfigFS(t, fstest.MapFS{"configs/default.toml": {Data: []byte("log-level=\"debug\"\n")}})
+		withConfigFS(t, fstest.MapFS{"configs/default.toml": {Data: []byte("[gateway]\ntoken = \"fake-token\"\n")}})
 		t.Setenv("APP_ENV", "development")
 
 		_, err := Load(context.Background(), "")

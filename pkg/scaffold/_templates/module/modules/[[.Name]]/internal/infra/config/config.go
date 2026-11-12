@@ -10,8 +10,11 @@ import (
 	"github.com/rotisserie/eris"
 )
 
-//go:embed configs/*.toml
+//go:embed configs/*
 var embeddedFS embed.FS
+
+// SecretPlaceholders are the fake values refused outside development and testing.
+var SecretPlaceholders = []string{"rcv", "fake-secret", "fake-token", "CHANGE-ME"}
 
 // getConfigFS returns the filesystem to use for reading config files.
 // This is a variable so it can be mocked in tests.
@@ -20,12 +23,13 @@ var getConfigFS = func() fs.FS {
 }
 
 // Gateway is the external provider the module's gateway slices send through.
-// The token comes from the environment only, like a database password.
+// The token is a fake value in default.toml; the real one lives in
+// development.toml.age or GATEWAY_TOKEN.
 // ponytail: one URL and token per module; move to [gateway.<entity>] when a
 // module talks to two providers.
 type Gateway struct {
 	URL   string `mapstructure:"url"`
-	Token string `env:"GATEWAY_TOKEN" json:"-" mapstructure:"-"`
+	Token string `env:"GATEWAY_TOKEN" json:"-" mapstructure:"token"`
 }
 
 type Config struct {
@@ -46,18 +50,12 @@ type Config struct {
 	LogLevel pfslog.LogLevel `mapstructure:"log-level"`
 }
 
-var conf *Config
-
 // Load reads the TOML files and automatically overrides them with Env Vars
 // Load loads the configurations from embedded files:
 // - configs/default.toml
 // - configs/<APP_ENV>.toml if exist
 // If envs is not nil, automatically overrides them with Env Vars.
 func Load(ctx context.Context, envPrefix string) (*Config, error) {
-	if conf != nil {
-		return conf, nil
-	}
-
 	conf := new(Config)
 	configFS := getConfigFS()
 
@@ -65,12 +63,6 @@ func Load(ctx context.Context, envPrefix string) (*Config, error) {
 	if err != nil {
 		return nil, eris.Wrap(err, "error filling config")
 	}
-
-[[- if .Database]]
-	if conf.Database.Password == "" {
-		return nil, eris.New("database password is empty")
-	}
-[[- end]]
 
 	return conf, nil
 }

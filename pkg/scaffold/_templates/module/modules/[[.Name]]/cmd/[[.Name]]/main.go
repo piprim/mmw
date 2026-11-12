@@ -15,6 +15,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 [[- end]]
 	"[[.PlatformPath]]/pkg/platform"
+[[- if .Database]]
+	pfconfig "[[.PlatformPath]]/pkg/platform/config"
+[[- end]]
 	pfcore "[[.PlatformPath]]/pkg/platform/core"
 	pfevents "[[.PlatformPath]]/pkg/platform/events"
 [[- if .Database]]
@@ -94,6 +97,14 @@ func main() {
 	// systemBus := setupRabbitMQ()
 
 [[- if .Database]]
+
+	err = pfconfig.RequireSecret(conf.Environment, "database password", conf.Database.Password, config.SecretPlaceholders...)
+	if err != nil {
+		exitCode = 1
+		_, _ = fmt.Fprintf(os.Stdout, "%v: set it in the TOML overlay or DB_PASSWORD\n", err)
+
+		return
+	}
 
 	dbPool, err = pfpg.GetPgxPool(ctx, logger, conf.Database.URL())
 	if err != nil {

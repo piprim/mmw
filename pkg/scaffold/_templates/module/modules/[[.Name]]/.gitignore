@@ -42,8 +42,8 @@ configs/*.local.yaml
 coverage.out
 coverage.html
 
-# This config is used by the team when developing
-internal/infra/config/configs/development.toml
+# Personal overrides (hosts, ports) for development only. Never a secret: go:embed compiles this file into the binary.
+internal/infra/config/configs/local.toml
 
 graph.svg
 un-stow.log

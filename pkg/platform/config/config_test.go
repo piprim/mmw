@@ -2,11 +2,14 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 
+	"github.com/sethvargo/go-envconfig"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +29,7 @@ type TestConfig struct {
 
 type TestDatabase struct {
 	User     string `mapstructure:"user"`
-	Password string `env:"DB_PASSWORD, required"`
+	Password string `env:"DB_PASSWORD"`
 	Host     string `mapstructure:"host"`
 	Port     string `mapstructure:"port"`
 	Name     string `mapstructure:"name"`
@@ -100,12 +103,33 @@ func TestContext_Fill(t *testing.T) {
 			assert.Error(t, err, "Fill() should return error when APP_ENV is missing")
 		})
 
-		t.Run("missing DB_PASSWORD", func(t *testing.T) {
-			setEnv(t, map[string]string{"APP_ENV": "test"})
+	})
+
+	pwFS := func() fstest.MapFS {
+		return fstest.MapFS{"configs/default.toml": &fstest.MapFile{Data: []byte("[database]\nuser = \"rcv\"\npassword = \"from-toml\"\n")}}
+	}
+	fillPw := func(t *testing.T, env map[string]string) string {
+		t.Helper()
+		resetViper()
+		t.Cleanup(resetViper)
+		env["APP_ENV"] = "development"
+		setEnv(t, env)
+		if _, ok := env["DB_PASSWORD"]; !ok {
 			os.Unsetenv("DB_PASSWORD")
-			err := NewContext(context.Background(), mockFS, "").Fill(&TestConfig{})
-			assert.Error(t, err, "Fill() should return error when DB_PASSWORD is missing")
-		})
+		}
+		config := &TestConfig{}
+		require.NoError(t, NewContext(context.Background(), pwFS(), "").Fill(config))
+		return config.Database.Password
+	}
+
+	t.Run("TOML provides the password when the env var is unset", func(t *testing.T) {
+		assert.Equal(t, "from-toml", fillPw(t, map[string]string{}))
+	})
+	t.Run("env var overrides the TOML password", func(t *testing.T) {
+		assert.Equal(t, "from-env", fillPw(t, map[string]string{"DB_PASSWORD": "from-env"}))
+	})
+	t.Run("env var set but empty keeps the TOML password", func(t *testing.T) {
+		assert.Equal(t, "from-toml", fillPw(t, map[string]string{"DB_PASSWORD": ""}))
 	})
 
 	t.Run("succeeds with all variables and loads database config", func(t *testing.T) {
@@ -137,7 +161,7 @@ func TestContext_Fill(t *testing.T) {
 		resetViper()
 		t.Cleanup(resetViper)
 
-		setEnv(t, map[string]string{"DB_PASSWORD": "test_password", "APP_ENV": "nonexistent_env"})
+		setEnv(t, map[string]string{"DB_PASSWORD": "test_password", "APP_ENV": "testing"})
 
 		config := &TestConfig{}
 		err := NewContext(context.Background(), defaultFS(), "").Fill(config)
@@ -162,7 +186,7 @@ func TestContext_Fill(t *testing.T) {
 		resetViper()
 		t.Cleanup(resetViper)
 
-		setEnv(t, map[string]string{"DB_PASSWORD": "os_test_password", "APP_ENV": "default"})
+		setEnv(t, map[string]string{"DB_PASSWORD": "os_test_password", "APP_ENV": "testing"})
 
 		config := &TestConfig{}
 		err := NewContext(context.Background(), defaultFS(), "").Fill(config)
@@ -170,7 +194,7 @@ func TestContext_Fill(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, config.Database)
 		assert.Equal(t, "os_test_password", config.Database.Password)
-		assert.Equal(t, "default", config.Environment)
+		assert.Equal(t, "testing", config.Environment)
 		assert.Equal(t, "rcv", config.Database.User)
 		assert.Equal(t, "localhost", config.Database.Host)
 		assert.Equal(t, "4332", config.Database.Port)
@@ -258,7 +282,7 @@ func TestContext_Fill(t *testing.T) {
 		resetViper()
 		t.Cleanup(resetViper)
 
-		setEnv(t, map[string]string{"DB_PASSWORD": "test_password", "APP_ENV": "default"})
+		setEnv(t, map[string]string{"DB_PASSWORD": "test_password", "APP_ENV": "testing"})
 
 		err := NewContext(context.Background(), fstest.MapFS{}, "").Fill(&TestConfig{})
 
@@ -275,12 +299,12 @@ func TestContext_Fill(t *testing.T) {
 				Data: []byte("app-name = \"service-name\"\n\n[database]\nuser = \"rcv\"\nhost = \"localhost\"\nport = \"4332\"\nname = \"poc\"\n"),
 			},
 		}
-		setEnv(t, map[string]string{"DB_PASSWORD": "test_password", "APP_ENV": "production"})
+		setEnv(t, map[string]string{"DB_PASSWORD": "test_password", "APP_ENV": "development"})
 
 		config := &TestConfig{}
 		require.NoError(t, NewContext(context.Background(), mockFS, "").Fill(config))
 		assert.Equal(t, "service-name", config.AppName)
-		assert.Equal(t, "production", config.Environment)
+		assert.Equal(t, "development", config.Environment)
 	})
 
 	t.Run("AppName empty when not specified in TOML", func(t *testing.T) {
@@ -324,12 +348,12 @@ func TestContext_Fill(t *testing.T) {
 				Data: []byte("app-name = \"my-app_v1.0\"\n\n[database]\nuser = \"rcv\"\nhost = \"localhost\"\nport = \"4332\"\nname = \"poc\"\n"),
 			},
 		}
-		setEnv(t, map[string]string{"DB_PASSWORD": "test_password", "APP_ENV": "staging"})
+		setEnv(t, map[string]string{"DB_PASSWORD": "test_password", "APP_ENV": "development"})
 
 		config := &TestConfig{}
 		require.NoError(t, NewContext(context.Background(), mockFS, "").Fill(config))
 		assert.Equal(t, "my-app_v1.0", config.AppName)
-		assert.Equal(t, "staging", config.Environment)
+		assert.Equal(t, "development", config.Environment)
 	})
 }
 
@@ -338,25 +362,227 @@ func TestEnvUnmarshal(t *testing.T) {
 	defer resetViper()
 	ctx := context.Background()
 
-	t.Run("with envs map", func(t *testing.T) {
+	t.Run("reads the OS environment", func(t *testing.T) {
 		setEnv(t, map[string]string{
 			"DB_PASSWORD": "secret_pass",
 			"APP_ENV":     "production",
 		})
 
 		config := &TestConfig{}
-		err := envUnmarshal(ctx, config, nil, "")
+		err := envUnmarshal(ctx, config, envconfig.OsLookuper(), false)
 		require.NoError(t, err)
 
 		assert.Equal(t, "production", config.Environment)
 		assert.Equal(t, "secret_pass", config.Database.Password)
 	})
 
-	t.Run("with nil envs uses OS environment", func(t *testing.T) {
-		config := &TestConfig{}
-		err := envUnmarshal(ctx, config, nil, "")
-		if err != nil {
-			t.Logf("envUnmarshal() with nil envs failed as expected: %v", err)
-		}
+	t.Run("missing required APP_ENV errors", func(t *testing.T) {
+		setEnv(t, map[string]string{})
+		os.Unsetenv("APP_ENV")
+		assert.Error(t, envUnmarshal(ctx, &TestConfig{}, envconfig.OsLookuper(), false))
 	})
+}
+
+func TestContext_Fill_Overlays(t *testing.T) {
+	const defaultTOML = "[database]\nuser = \"rcv\"\n"
+	const prodTOML = "[database]\npassword = \"prod-secret\"\nhost = \"db.internal\"\n"
+
+	if _, err := os.Stat(SystemIdentityFile); err == nil {
+		t.Logf("%s exists: the no-identity cases are skipped", SystemIdentityFile)
+	}
+
+	// env isolates the identity lookup from the machine and sets extra variables.
+	env := func(t *testing.T, extra map[string]string) string {
+		t.Helper()
+		home := t.TempDir()
+		m := map[string]string{"HOME": home}
+		for k, v := range extra {
+			m[k] = v
+		}
+		setEnv(t, m)
+		for _, k := range []string{"XDG_CONFIG_HOME", "AGE_IDENTITY", "AGE_IDENTITY_FILE", "AUTH_AGE_IDENTITY"} {
+			if _, set := m[k]; !set {
+				t.Setenv(k, "")
+				os.Unsetenv(k)
+			}
+		}
+
+		return home
+	}
+	files := func(kv map[string]string) fstest.MapFS {
+		fsys := fstest.MapFS{"configs/default.toml": &fstest.MapFile{Data: []byte(defaultTOML)}}
+		for k, v := range kv {
+			fsys["configs/"+k] = &fstest.MapFile{Data: []byte(v)}
+		}
+
+		return fsys
+	}
+	fill := func(t *testing.T, fsys fstest.MapFS, prefix string) (*TestConfig, error) {
+		t.Helper()
+		resetViper()
+		t.Cleanup(resetViper)
+		cfg := &TestConfig{}
+		err := NewContext(context.Background(), fsys, prefix).Fill(cfg)
+
+		return cfg, err
+	}
+	skipIfSystemKey := func(t *testing.T) {
+		t.Helper()
+		if _, err := os.Stat(SystemIdentityFile); err == nil {
+			t.Skip(SystemIdentityFile + " exists on this machine")
+		}
+	}
+
+	t.Run("encrypted overlay merged with AGE_IDENTITY", func(t *testing.T) {
+		id := newIdentity(t)
+		env(t, map[string]string{"APP_ENV": "production", "AGE_IDENTITY": id.String()})
+		cfg, err := fill(t, fstestWith(files(nil), "production.toml.age", encryptArmored(t, prodTOML, id.Recipient())), "")
+		require.NoError(t, err)
+		assert.Equal(t, "prod-secret", cfg.Database.Password)
+		assert.Equal(t, "db.internal", cfg.Database.Host)
+	})
+
+	t.Run("encrypted overlay merged with AGE_IDENTITY_FILE", func(t *testing.T) {
+		id := newIdentity(t)
+		p := filepath.Join(t.TempDir(), "id.txt")
+		writeFile(t, p, id.String()+"\n")
+		env(t, map[string]string{"APP_ENV": "production", "AGE_IDENTITY_FILE": p})
+		cfg, err := fill(t, fstestWith(files(nil), "production.toml.age", encryptArmored(t, prodTOML, id.Recipient())), "")
+		require.NoError(t, err)
+		assert.Equal(t, "prod-secret", cfg.Database.Password)
+		assert.Equal(t, "db.internal", cfg.Database.Host)
+	})
+
+	t.Run("encrypted overlay merged with the default identity file", func(t *testing.T) {
+		id := newIdentity(t)
+		home := env(t, map[string]string{"APP_ENV": "production"})
+		writeFile(t, filepath.Join(home, ".config", "age", "keys.txt"), id.String()+"\n")
+		cfg, err := fill(t, fstestWith(files(nil), "production.toml.age", encryptArmored(t, prodTOML, id.Recipient())), "")
+		require.NoError(t, err)
+		assert.Equal(t, "prod-secret", cfg.Database.Password)
+	})
+
+	t.Run("a file holding two identities decrypts when the second one matches", func(t *testing.T) {
+		id := newIdentity(t)
+		home := env(t, map[string]string{"APP_ENV": "production"})
+		writeFile(t, filepath.Join(home, ".config", "age", "keys.txt"), newIdentity(t).String()+"\n"+id.String()+"\n")
+		cfg, err := fill(t, fstestWith(files(nil), "production.toml.age", encryptArmored(t, prodTOML, id.Recipient())), "")
+		require.NoError(t, err)
+		assert.Equal(t, "prod-secret", cfg.Database.Password)
+	})
+
+	t.Run("prefixed identity variable is honoured", func(t *testing.T) {
+		id := newIdentity(t)
+		env(t, map[string]string{"APP_ENV": "production", "AUTH_AGE_IDENTITY": id.String()})
+		cfg, err := fill(t, fstestWith(files(nil), "production.toml.age", encryptArmored(t, prodTOML, id.Recipient())), "AUTH_")
+		require.NoError(t, err)
+		assert.Equal(t, "prod-secret", cfg.Database.Password)
+	})
+
+	t.Run("missing identity", func(t *testing.T) {
+		skipIfSystemKey(t)
+		env(t, map[string]string{"APP_ENV": "production"})
+		_, err := fill(t, fstestWith(files(nil), "production.toml.age", encryptArmored(t, prodTOML, newIdentity(t).Recipient())), "")
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrNoAgeIdentity))
+		assert.Contains(t, err.Error(), ".config/age/keys.txt")
+	})
+
+	t.Run("present development.toml.age with no identity is an error", func(t *testing.T) {
+		skipIfSystemKey(t)
+		env(t, map[string]string{"APP_ENV": "development"})
+		_, err := fill(t, fstestWith(files(nil), "development.toml.age", encryptArmored(t, prodTOML, newIdentity(t).Recipient())), "")
+		assert.True(t, errors.Is(err, ErrNoAgeIdentity))
+	})
+
+	t.Run("encrypted development overlay overrides default.toml", func(t *testing.T) {
+		id := newIdentity(t)
+		env(t, map[string]string{"APP_ENV": "development", "AGE_IDENTITY": id.String()})
+		fsys := fstestWith(files(nil), "default.toml", []byte("[database]\npassword = \"rcv\"\n"))
+		fsys = fstestWith(fsys, "development.toml.age", encryptArmored(t, "[database]\npassword = \"real-dev\"\n", id.Recipient()))
+		cfg, err := fill(t, fsys, "")
+		require.NoError(t, err)
+		assert.Equal(t, "real-dev", cfg.Database.Password)
+	})
+
+	t.Run("wrong identity", func(t *testing.T) {
+		env(t, map[string]string{"APP_ENV": "production", "AGE_IDENTITY": newIdentity(t).String()})
+		_, err := fill(t, fstestWith(files(nil), "production.toml.age", encryptArmored(t, prodTOML, newIdentity(t).Recipient())), "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "production.toml.age")
+	})
+
+	t.Run("overlay plaintext is not TOML", func(t *testing.T) {
+		id := newIdentity(t)
+		env(t, map[string]string{"APP_ENV": "production", "AGE_IDENTITY": id.String()})
+		_, err := fill(t, fstestWith(files(nil), "production.toml.age", encryptArmored(t, "this is not toml", id.Recipient())), "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "production.toml.age")
+	})
+
+	t.Run("both clear and encrypted overlay", func(t *testing.T) {
+		env(t, map[string]string{"APP_ENV": "staging"})
+		fsys := fstestWith(files(map[string]string{"staging.toml": prodTOML}), "staging.toml.age", []byte("x"))
+		_, err := fill(t, fsys, "")
+		assert.True(t, errors.Is(err, ErrOverlayAmbiguous))
+	})
+
+	for _, e := range []string{"staging", "production"} {
+		t.Run(e+" without overlay fails closed", func(t *testing.T) {
+			env(t, map[string]string{"APP_ENV": e})
+			_, err := fill(t, files(nil), "")
+			assert.True(t, errors.Is(err, ErrOverlayRequired))
+		})
+	}
+
+	for _, e := range []string{"development", "testing"} {
+		t.Run(e+" without overlay is fine", func(t *testing.T) {
+			env(t, map[string]string{"APP_ENV": e})
+			_, err := fill(t, files(nil), "")
+			assert.NoError(t, err)
+		})
+	}
+
+	const localTOML = "[database]\nhost = \"local\"\nport = \"5435\"\n"
+
+	t.Run("local.toml merged last in development", func(t *testing.T) {
+		env(t, map[string]string{"APP_ENV": "development"})
+		cfg, err := fill(t, files(map[string]string{"development.toml": "[database]\nhost = \"dev\"\n", "local.toml": localTOML}), "")
+		require.NoError(t, err)
+		assert.Equal(t, "local", cfg.Database.Host)
+		assert.Equal(t, "5435", cfg.Database.Port)
+	})
+
+	t.Run("local.toml merged in development even without an overlay", func(t *testing.T) {
+		env(t, map[string]string{"APP_ENV": "development"})
+		cfg, err := fill(t, files(map[string]string{"local.toml": localTOML}), "")
+		require.NoError(t, err)
+		assert.Equal(t, "local", cfg.Database.Host)
+	})
+
+	t.Run("local.toml ignored in staging", func(t *testing.T) {
+		env(t, map[string]string{"APP_ENV": "staging"})
+		cfg, err := fill(t, files(map[string]string{"staging.toml": "[database]\nhost = \"stg\"\n", "local.toml": localTOML}), "")
+		require.NoError(t, err)
+		assert.Equal(t, "stg", cfg.Database.Host)
+	})
+
+	t.Run("env var still overrides the decrypted value", func(t *testing.T) {
+		id := newIdentity(t)
+		env(t, map[string]string{"APP_ENV": "production", "AGE_IDENTITY": id.String(), "DB_PASSWORD": "from-env"})
+		cfg, err := fill(t, fstestWith(files(nil), "production.toml.age", encryptArmored(t, prodTOML, id.Recipient())), "")
+		require.NoError(t, err)
+		assert.Equal(t, "from-env", cfg.Database.Password)
+	})
+}
+
+// fstestWith returns a copy of fsys with configs/<name> added or replaced.
+func fstestWith[D string | []byte](fsys fstest.MapFS, name string, data D) fstest.MapFS {
+	out := fstest.MapFS{}
+	for k, v := range fsys {
+		out[k] = v
+	}
+	out["configs/"+name] = &fstest.MapFile{Data: []byte(data)}
+
+	return out
 }

@@ -5,11 +5,13 @@ import (
 	"log/slog"
 	"os"
 
+	pfconfig "[[.PlatformPath]]/pkg/platform/config"
 	dbpgcli "[[.PlatformPath]]/pkg/platform/db/cli"
 	pfslog "[[.PlatformPath]]/pkg/platform/slog"
 
 	"github.com/rotisserie/eris"
 
+	"[[.ModulePath]]/internal/infra/config"
 	"[[.ModulePath]]/internal/infra/persistence/migrations"
 )
 
@@ -20,6 +22,12 @@ func main() {
 	conf, err := loadConfig()
 	if err != nil {
 		logError("loading config failed", err)
+		os.Exit(1)
+	}
+
+	err = pfconfig.RequireSecret(conf.Environment, "database password", conf.Database.Password, config.SecretPlaceholders...)
+	if err != nil {
+		logError("loading config failed", eris.Wrap(err, "set it in the TOML overlay or DB_PASSWORD"))
 		os.Exit(1)
 	}
 
