@@ -116,16 +116,18 @@ func (o authOptions) extractToken(r *http.Request) (token string, fromCookie boo
 		}
 	}
 
-	return extractBearerToken(r), false
+	return BearerToken(r.Header), false
 }
 
-func extractBearerToken(r *http.Request) string {
-	auth := r.Header.Get("Authorization")
-	if !strings.HasPrefix(auth, "Bearer ") {
+// BearerToken returns the token of an `Authorization: Bearer <token>` header, or ""
+// when the header is absent or is not a Bearer credential.
+func BearerToken(h http.Header) string {
+	token, ok := strings.CutPrefix(h.Get("Authorization"), "Bearer ")
+	if !ok {
 		return ""
 	}
 
-	return strings.TrimPrefix(auth, "Bearer ")
+	return token
 }
 
 func writeUnauthorized(w http.ResponseWriter) {

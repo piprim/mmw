@@ -247,3 +247,23 @@ func TestAuthMiddleware_SessionCookie(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 }
+
+func TestBearerToken(t *testing.T) {
+	cases := map[string]struct{ header, want string }{
+		"a Bearer credential":      {"Bearer abc", "abc"},
+		"no Authorization header":  {"", ""},
+		"another scheme":           {"Basic abc", ""},
+		"a bare token":             {"abc", ""},
+		"the scheme is case-exact": {"bearer abc", ""},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			h := http.Header{}
+			if tc.header != "" {
+				h.Set("Authorization", tc.header)
+			}
+
+			assert.Equal(t, tc.want, BearerToken(h))
+		})
+	}
+}
