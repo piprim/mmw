@@ -80,7 +80,7 @@ func TestCORSMiddleware(t *testing.T) {
 		assert.Empty(t, recBad.Header().Get("Access-Control-Allow-Origin"))
 	})
 
-	t.Run("exposes the renewed token header to cross-origin clients", func(t *testing.T) {
+	t.Run("exposes the renewed token header to cross-origin Bearer clients", func(t *testing.T) {
 		cfg := &pfconfig.Server{Host: "https://api.example.com"}
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(RenewedTokenHeader, "new-token")

@@ -291,7 +291,7 @@ type TokenValidator func(ctx context.Context, token string) (TokenValidation, er
 middleware.BearerAuthMiddleware(validate TokenValidator, logger, excludedPaths []string) Middleware
 ```
 
-`TokenValidator` is a plain function type — modules provide their own implementation, typically a closure over the auth module's private service. When it returns a `RenewedToken`, the middleware sets it in the `X-Renewed-Token` response header (`middleware.RenewedTokenHeader`), before the handler runs, so the client can swap its token whatever the handler answers.
+`TokenValidator` is a plain function type — modules provide their own implementation, typically a closure over the auth module's private service. When it returns a `RenewedToken` the middleware hands it back before the handler runs, whatever the handler answers: in the session cookie when the request came with it (`WithSessionCookie`), so a browser never sees a token in a header or body; in the `X-Renewed-Token` response header (`middleware.RenewedTokenHeader`, exposed by CORS) when it came as a `Bearer`, so non-browser clients can swap their token.
 
 ```go
 func NewTokenValidator(svc defauth.AuthPrivateService) pfmiddleware.TokenValidator {

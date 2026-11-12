@@ -11,7 +11,8 @@ import (
 	"github.com/piprim/mmw/pkg/platform/sessioncookie"
 )
 
-// RenewedTokenHeader is the response header carrying a renewed bearer token.
+// RenewedTokenHeader is the response header carrying a renewed token to a Bearer client.
+// A browser session never gets it: its renewed token travels in the session cookie.
 const RenewedTokenHeader = "X-Renewed-Token"
 
 // TokenValidation is what a TokenValidator learns about a valid bearer token.
@@ -19,7 +20,8 @@ type TokenValidation struct {
 	// UserID is the authenticated user.
 	UserID uuid.UUID
 	// RenewedToken, when not empty, replaces the validated token: it had expired
-	// but could be renewed. The middleware hands it to the client in RenewedTokenHeader.
+	// but could be renewed. The middleware hands it back in the session cookie when the
+	// request came with it, in RenewedTokenHeader when it came as a Bearer.
 	RenewedToken string
 }
 
@@ -55,8 +57,8 @@ func BearerAuthMiddleware(validate TokenValidator, logger *slog.Logger, excluded
 //  2. Extracts the token: from the session cookie when WithSessionCookie is
 //     given and the cookie is present, otherwise from the Bearer Authorization header.
 //  3. Calls validate; on success it injects the userID via pfauthctx.WithUserID and,
-//     if the token was renewed, sets RenewedTokenHeader on the response, and the
-//     session cookie too when the token came from it.
+//     if the token was renewed, sets it back in the session cookie when the token came
+//     from it, or in RenewedTokenHeader when it came as a Bearer.
 //  4. Returns HTTP 401 with a Connect-compatible JSON body on any failure.
 func AuthMiddleware(
 	validate TokenValidator, logger *slog.Logger, excludedPaths []string, opts ...AuthOption,
@@ -92,9 +94,10 @@ func AuthMiddleware(
 			}
 
 			if validation.RenewedToken != "" {
-				w.Header().Set(RenewedTokenHeader, validation.RenewedToken)
 				if fromCookie {
 					o.cookie.Set(w.Header(), validation.RenewedToken)
+				} else {
+					w.Header().Set(RenewedTokenHeader, validation.RenewedToken)
 				}
 			}
 

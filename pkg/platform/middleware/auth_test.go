@@ -43,14 +43,12 @@ func TestBearerAuthMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
-	t.Run("renewed token is sent back in the response header", func(t *testing.T) {
+	t.Run("a token renewed for a Bearer request is handed back in the header", func(t *testing.T) {
 		validate := func(_ context.Context, _ string) (TokenValidation, error) {
 			return TokenValidation{UserID: uuid.New(), RenewedToken: "new-token"}, nil
 		}
 		// The handler fails: the header must be there anyway.
-		next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusForbidden)
-		})
+		next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusForbidden) })
 
 		mw := BearerAuthMiddleware(validate, slog.Default(), nil)
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -59,6 +57,7 @@ func TestBearerAuthMiddleware(t *testing.T) {
 		mw(next).ServeHTTP(rr, req)
 
 		assert.Equal(t, "new-token", rr.Header().Get(RenewedTokenHeader))
+		assert.Empty(t, rr.Result().Cookies())
 	})
 
 	t.Run("no renewal sets no header", func(t *testing.T) {
@@ -215,7 +214,7 @@ func TestAuthMiddleware_SessionCookie(t *testing.T) {
 		require.Len(t, cookies, 1)
 		assert.Equal(t, "__Secure-session", cookies[0].Name)
 		assert.Equal(t, "new-token", cookies[0].Value)
-		assert.Equal(t, "new-token", rr.Header().Get(RenewedTokenHeader), "legacy clients still get the header")
+		assert.Empty(t, rr.Header().Get(RenewedTokenHeader), "a browser session never gets the token in a header")
 	})
 
 	t.Run("a token renewed for a Bearer request sets no cookie", func(t *testing.T) {
