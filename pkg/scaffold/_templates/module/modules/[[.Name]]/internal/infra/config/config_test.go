@@ -56,6 +56,18 @@ func TestLoad(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "rcv", cfg.Database.Password)
 	})
+[[- if .Grpc]]
+
+	t.Run("refuses a wildcard allowed-origin", func(t *testing.T) {
+		withConfigFS(t, fstest.MapFS{
+			"configs/default.toml": {Data: []byte(testDefaultTOML + "\n[server]\nallowed-origins = [\"*\"]\n")},
+		})
+		t.Setenv("APP_ENV", "development")
+
+		_, err := Load(context.Background(), "")
+		require.ErrorIs(t, err, pfconfig.ErrInvalidAllowedOrigin)
+	})
+[[- end]]
 }
 [[- else -]]
 package config
@@ -107,5 +119,17 @@ func TestLoad(t *testing.T) {
 		_, err := Load(context.Background(), "")
 		assert.NoError(t, err)
 	})
+[[- if .Grpc]]
+
+	t.Run("refuses a wildcard allowed-origin", func(t *testing.T) {
+		withConfigFS(t, fstest.MapFS{
+			"configs/default.toml": {Data: []byte(testDefaultTOML + "\n[server]\nallowed-origins = [\"*\"]\n")},
+		})
+		t.Setenv("APP_ENV", "development")
+
+		_, err := Load(context.Background(), "")
+		require.ErrorIs(t, err, pfconfig.ErrInvalidAllowedOrigin)
+	})
+[[- end]]
 }
 [[- end]]

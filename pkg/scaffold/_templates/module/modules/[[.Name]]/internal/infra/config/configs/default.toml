@@ -21,9 +21,9 @@ token = "fake-token"
 # Each module listens on its own port when run standalone: core is 8090,
 # auth 8091. Change this value if it clashes with another module.
 port = 8092
-scheme = "https"
+scheme = "http"
 host = "localhost"
-allowed-origins = ["*"] # IMPORTANT; Change this in production !
+allowed-origins = ["http://localhost:8090", "http://localhost:4200", "http://localhost:4201"] # Explicit origins only (credentials are allowed): the apps allowed to call this API. Set the real ones in production.
 debug-enabled = true
 
 [auth-server]

@@ -572,6 +572,8 @@ func TestRenderMatrix(t *testing.T) {
 				assertFileExists(t, dir, mod+"/.air.toml")
 				assertFileContains(t, dir, root, "func newHTTPServer(")
 				assertFileContains(t, dir, root, "AuthSvc    defauth.AuthPrivateService")
+				assertFileContains(t, dir, mod+"/internal/infra/config/config.go", "conf.Server.Validate()")
+				assertFileNotContains(t, dir, mod+"/internal/infra/config/configs/default.toml", `allowed-origins = ["*"]`)
 			} else {
 				assertFileNotExists(t, dir, mod+"/cmd/"+s.name)
 				assertFileNotExists(t, dir, mod+"/.air.toml")
@@ -580,6 +582,7 @@ func TestRenderMatrix(t *testing.T) {
 				assertFileNotContains(t, dir, root, "func (m *Module) Handler()")
 				assertFileNotContains(t, dir, mod+"/mise.toml", `[tasks."run:dev"]`)
 				assertFileNotContains(t, dir, mod+"/internal/infra/config/config.go", "AuthServer")
+				assertFileNotContains(t, dir, mod+"/internal/infra/config/config.go", "conf.Server.Validate()")
 			}
 			t.Run("snippets insert at every marker and stay gofmt-clean", func(t *testing.T) {
 				snippets, err := scaffold.RenderSnippets(s.vars())

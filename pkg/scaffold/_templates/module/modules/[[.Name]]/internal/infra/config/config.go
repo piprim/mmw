@@ -63,6 +63,14 @@ func Load(ctx context.Context, envPrefix string) (*Config, error) {
 	if err != nil {
 		return nil, eris.Wrap(err, "error filling config")
 	}
+[[- if .Grpc]]
+
+	if conf.Server != nil {
+		if err := conf.Server.Validate(); err != nil {
+			return nil, eris.Wrap(err, "invalid server config")
+		}
+	}
+[[- end]]
 
 	return conf, nil
 }
