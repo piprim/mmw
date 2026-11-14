@@ -16,7 +16,7 @@ func NewCmd() *cobra.Command {
 		Short: "Scaffold a new module or slice",
 	}
 	cmd.AddCommand(NewModuleCmd())
-	cmd.AddCommand(NewEntityCmd())
+	cmd.AddCommand(NewSliceCmd())
 
 	return cmd
 }

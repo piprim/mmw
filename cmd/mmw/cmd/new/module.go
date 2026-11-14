@@ -37,7 +37,7 @@ runs buf:generate, go mod tidy and go work sync.
 
 With --var for every required variable (name, entity) the TUI is skipped.
 An external --template directory holds module/ and slice/ subdirectories.
-Later slices: mmw new entity.
+Later slices: mmw new slice.
 
   mmw new module --var name=facturation --var entity=facture --var create-table=false
   mmw new module --var name=messagerie --var entity=sms --var database=false --var shape=gateway --var grpc=false`,

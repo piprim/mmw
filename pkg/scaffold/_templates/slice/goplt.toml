@@ -1,11 +1,11 @@
-# mmw new entity — manifest of the slice template (once per entity).
+# mmw new slice — manifest of the slice template (once per entity).
 description = "One slice of a cpro2 hexagonal module"
 delimiters = ["[[", "]]"]
 
 [variables.module]
 kind = "stringChoice"
 value = []
-description = "Module the slice joins (filled by mmw new entity; mmw new module drops it)"
+description = "Module the slice joins (filled by mmw new slice; mmw new module drops it)"
 
 [variables.entity]
 kind = "input"

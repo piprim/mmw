@@ -65,7 +65,7 @@ func TestListModules(t *testing.T) {
 	})
 }
 
-func TestEntityPromptOrder(t *testing.T) {
+func TestSlicePromptOrder(t *testing.T) {
 	t.Run("module, entity, shape, create-table", func(t *testing.T) {
 		m, err := goplt.LoadManifest(scaffold.SliceFS())
 		require.NoError(t, err)
@@ -89,4 +89,14 @@ func TestNarrowShapes(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestNewCmdSubcommands(t *testing.T) {
+	names := map[string]bool{}
+	for _, c := range NewCmd().Commands() {
+		names[c.Name()] = true
+	}
+
+	t.Run("slice is registered", func(t *testing.T) { assert.True(t, names["slice"]) })
+	t.Run("entity is gone", func(t *testing.T) { assert.False(t, names["entity"]) })
 }

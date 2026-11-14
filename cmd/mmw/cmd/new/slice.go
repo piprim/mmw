@@ -20,7 +20,7 @@ import (
 // moduleVar is the slice manifest variable holding the target module.
 const moduleVar = "Module"
 
-func NewEntityCmd() *cobra.Command {
+func NewSliceCmd() *cobra.Command {
 	var (
 		module       string
 		templatePath string
@@ -28,8 +28,8 @@ func NewEntityCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "entity [MODULE]",
-		Short: "Add a slice (a new entity) to an existing module",
+		Use:   "slice [MODULE]",
+		Short: "Add a slice to an existing module",
 		Long: `Renders one more slice (domain, application, adapters, proto, migrations) into
 modules/<module>/, wires it at the module's markers, then runs buf:generate,
 go mod tidy and go work sync. Without a module the TUI asks for it.
@@ -39,7 +39,7 @@ gateway (only gateway without a database). Snippets whose marker is missing
 (hand-written modules) are printed. An external --template directory holds
 module/ and slice/ subdirectories.
 
-  mmw new entity facturation --var entity=avoir --var shape=read-model`,
+  mmw new slice facturation --var entity=avoir --var shape=read-model`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			positional := ""
@@ -47,7 +47,7 @@ module/ and slice/ subdirectories.
 				positional = args[0]
 			}
 
-			return runNewEntity(c.Context(), positional, module, templatePath, varFlags)
+			return runNewSlice(c.Context(), positional, module, templatePath, varFlags)
 		},
 	}
 	cmd.Flags().StringVar(&module, "module", "", "Module to add the slice to (overrides the argument)")
@@ -58,7 +58,7 @@ module/ and slice/ subdirectories.
 	return cmd
 }
 
-func runNewEntity(ctx context.Context, positional, moduleFlag, templatePath string, varFlags []string) error {
+func runNewSlice(ctx context.Context, positional, moduleFlag, templatePath string, varFlags []string) error {
 	root := platform.RootRepo()
 
 	name, sliceFlags, err := resolveModule(positional, moduleFlag, varFlags)

@@ -778,7 +778,7 @@ With a database, the `dao/boamodel` ships pre-rendered; `go test -tags integrati
 `SCAFFOLD_UPDATE_BOAMODEL=1` refreshes it. Its `boa:generate` task targets
 `-t '<name>.event,<name>.<entity>'` explicitly, not `<name>.*`, because
 goose's `<name>.goose_db_version` lives in the module schema and bungen has no
-exclude flag; a new table is added to that list (`mmw new entity` appends it).
+exclude flag; a new table is added to that list (`mmw new slice` appends it).
 The task runs the repository's bungen fork with
 `go run {{config_root}}/../../tools/bungen/main.go model …`: upstream bungen
 on `PATH` has no
@@ -791,7 +791,7 @@ three files.
 
 ```
 mmw new module [--template <dir>] [--var k=v]...   Scaffold a new module (TUI unless every --var is given)
-mmw new entity [MODULE] [--module <m>] [--template <dir>] [--var k=v]...   Add a slice to an existing module
+mmw new slice [MODULE] [--module <m>] [--template <dir>] [--var k=v]...   Add a slice to an existing module
 mmw check arch                            Validate architectural boundaries
 mmw check files [--fix] [files...]        Check files for whitespace / EOF / size
 mmw check format [--fix] [files...]       Check Go formatting with gofumpt
@@ -839,12 +839,12 @@ mmw new module --var name=facturation --var entity=facture --var create-table=fa
 Other modules reach the slice through `Module.<Entity>Service()` (the
 `contracts/go/application/<name>` interface); the single `Service()` is gone.
 
-### `mmw new entity`
+### `mmw new slice`
 
 ```bash
-mmw new entity facturation --var entity=avoir --var shape=read-model
-mmw new entity --module facturation          # TUI asks for entity and shape
-mmw new entity                               # TUI picks the module from modules/*/
+mmw new slice facturation --var entity=avoir --var shape=read-model
+mmw new slice --module facturation          # TUI asks for entity and shape
+mmw new slice                               # TUI picks the module from modules/*/
 ```
 
 `[MODULE]`, `--module` or `--var module=` names the module; without it a picker lists
