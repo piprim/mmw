@@ -11,15 +11,8 @@ import (
 
 // CORSMiddleware adds CORS support for Connect, gRPC, and gRPC-Web
 func CORSMiddleware(cfg *pfconfig.Server) Middleware {
-	// Strict host if nothing is provided
-	allowed := []string{cfg.Host}
-
-	if len(cfg.AllowedOrigins) > 0 {
-		allowed = cfg.AllowedOrigins
-	}
-
 	c := cors.New(cors.Options{
-		AllowedOrigins: allowed,
+		AllowedOrigins: cfg.EffectiveAllowedOrigins(),
 		AllowedMethods: connectcors.AllowedMethods(),
 		AllowedHeaders: connectcors.AllowedHeaders(),
 		// The session cookie rides on cross-origin calls from our other applications;

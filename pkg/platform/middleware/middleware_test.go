@@ -58,7 +58,7 @@ func TestCORSMiddleware(t *testing.T) {
 	})
 
 	t.Run("production: allows configured origin and blocks others", func(t *testing.T) {
-		cfg := &pfconfig.Server{Host: "https://api.example.com"}
+		cfg := &pfconfig.Server{Scheme: "https", Host: "api.example.com", Port: 443}
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
@@ -81,7 +81,7 @@ func TestCORSMiddleware(t *testing.T) {
 	})
 
 	t.Run("exposes the renewed token header to cross-origin Bearer clients", func(t *testing.T) {
-		cfg := &pfconfig.Server{Host: "https://api.example.com"}
+		cfg := &pfconfig.Server{Scheme: "https", Host: "api.example.com", Port: 443}
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(RenewedTokenHeader, "new-token")
 			w.WriteHeader(http.StatusOK)

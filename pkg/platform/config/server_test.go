@@ -109,3 +109,17 @@ func TestServer_Validate(t *testing.T) {
 		}
 	})
 }
+
+func TestServer_EffectiveAllowedOrigins(t *testing.T) {
+	t.Run("configured origins win", func(t *testing.T) {
+		s := &Server{AllowedOrigins: []string{"https://app.example.com"}}
+
+		assert.Equal(t, []string{"https://app.example.com"}, s.EffectiveAllowedOrigins())
+	})
+
+	t.Run("falls back to the server's own origin, with scheme and port", func(t *testing.T) {
+		s := &Server{Scheme: "http", Host: "localhost", Port: 8080}
+
+		assert.Equal(t, []string{"http://localhost:8080"}, s.EffectiveAllowedOrigins())
+	})
+}

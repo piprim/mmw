@@ -87,7 +87,7 @@ func NewHTTPServer(infra HTTPServerInfra) *HTTPServer {
 	loggerMiddleware := middleware.LoggingMiddleware(infra.Logger, infra.LogPayloads)
 	recoveryMiddleware := middleware.RecoveryMiddleware(infra.Logger)
 	corsMiddleware := middleware.CORSMiddleware(infra.Config)
-	originGuard := middleware.OriginGuard(infra.Config.AllowedOrigins, infra.Logger)
+	originGuard := middleware.OriginGuard(infra.Config.EffectiveAllowedOrigins(), infra.Logger)
 
 	// Chain Middlewares (Execution order goes outside-in)
 	// Request -> Logger -> Recovery -> CORS -> OriginGuard -> Mux
