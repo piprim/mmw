@@ -60,6 +60,17 @@ func (s *Server) Validate() error {
 	return nil
 }
 
+// EffectiveAllowedOrigins returns the origins the CORS and origin checks must
+// both enforce: AllowedOrigins, or the server's own origin
+// (scheme://host[:port]) when none is configured.
+func (s *Server) EffectiveAllowedOrigins() []string {
+	if len(s.AllowedOrigins) > 0 {
+		return s.AllowedOrigins
+	}
+
+	return []string{s.URL("", nil)}
+}
+
 func (s *Server) URL(path string, queries map[string]string) string {
 	port := ""
 	if (s.Scheme != "http" || s.Port != 80) && (s.Scheme != "https" || s.Port != 443) {
