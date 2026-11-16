@@ -10,7 +10,7 @@ require (
 	github.com/ThreeDotsLabs/watermill v1.5.3
 	github.com/fatih/color v1.19.0
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.12.0
+	github.com/jackc/pgx/v5 v5.13.0
 	github.com/lib/pq v1.12.3
 	github.com/lmittmann/tint v1.2.1
 	github.com/mattn/go-isatty v0.0.24
