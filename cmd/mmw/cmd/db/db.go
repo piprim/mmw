@@ -11,6 +11,8 @@ func NewCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(NewDumpCmd())
+	cmd.AddCommand(NewEnumCmd())
+	cmd.AddCommand(NewEnumDocCmd())
 
 	return cmd
 }
