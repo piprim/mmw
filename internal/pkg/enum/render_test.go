@@ -133,6 +133,32 @@ func TestRender_Comments(t *testing.T) {
 	}
 }
 
+func TestRender_AllowZero(t *testing.T) {
+	entry := evenementType
+	entry.AllowZero = true
+
+	t.Run("id 0 is a value", func(t *testing.T) {
+		got, err := Render(entry, []Row{row(0, "Dossier saisie"), row(1100, "Dossier Créé")})
+		if err != nil {
+			t.Fatalf("Render() error = %v", err)
+		}
+		if want := "// dossier_saisie_ID=0,\n"; !strings.Contains(string(got), want) {
+			t.Errorf("generated file does not contain %q:\n%s", want, got)
+		}
+	})
+
+	t.Run("a negative id is still an error", func(t *testing.T) {
+		_, err := Render(entry, []Row{row(-1, "minus")})
+		if err == nil {
+			t.Fatal("Render() error = nil, want an error")
+		}
+		// The flag is already set: the message must not suggest it.
+		if !strings.Contains(err.Error(), "want >= 0") || strings.Contains(err.Error(), "allow_zero") {
+			t.Errorf("error %q, want it to say \"want >= 0\" without naming allow_zero", err)
+		}
+	})
+}
+
 func TestRender_Errors(t *testing.T) {
 	nullID := Row{Label: sql.NullString{String: "a", Valid: true}}
 	nullLabel := Row{ID: sql.NullInt64{Int64: 3, Valid: true}}
@@ -151,7 +177,7 @@ func TestRender_Errors(t *testing.T) {
 		{name: "leading digit", rows: []Row{row(3, "1er RDV")}, contains: []string{"id 3"}, is: ErrLeadingDigit},
 		{name: "names differing by case and accent", rows: []Row{row(6, "Congé"), row(9, "conge")}, contains: []string{"conge_ID", "6", "9"}},
 		{name: "names giving the same Go constant", rows: []Row{row(28, "Relance R1"), row(34, "Relance R 1")}, contains: []string{"28", "34", "same Go constant"}},
-		{name: "id zero", rows: []Row{row(0, "zero")}, contains: []string{"id 0", "want > 0"}},
+		{name: "id zero", rows: []Row{row(0, "zero")}, contains: []string{"id 0", "want > 0", "allow_zero = true"}},
 		{name: "negative id", rows: []Row{row(-1, "minus")}, contains: []string{"id -1", "want > 0"}},
 		{
 			name:     "comment closing a parenthesis it did not open",

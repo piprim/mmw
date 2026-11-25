@@ -19,6 +19,9 @@ type Entry struct {
 	// Comment is an optional column whose text is written next to each value,
 	// and ends up in the doc comment of the constant.
 	Comment string `toml:"comment"`
+	// AllowZero accepts a row whose id is 0. The zero value of the Go type is
+	// then that row: an unset field cannot be told from it.
+	AllowZero bool `toml:"allow_zero"`
 }
 
 // Schema returns the schema of the table, public when Table names none.
@@ -57,6 +60,21 @@ func (e Entry) TypeName() string {
 // Package returns the Go package name, also the directory and file base name.
 func (e Entry) Package() string {
 	return strings.ToLower(e.TypeName())
+}
+
+// checkID rejects an id that may not be a value. 0 is the zero value of the
+// type and what a failed Parse returns: it is a valid row only when the entry
+// asks for it.
+func (e Entry) checkID(id int64) error {
+	want := "> 0, or 0 with allow_zero = true"
+	if e.AllowZero {
+		want = ">= 0"
+	}
+	if id < 0 || id == 0 && !e.AllowZero {
+		return fmt.Errorf("%s: invalid id %d in column %q (want %s)", e.Table, id, e.ID, want)
+	}
+
+	return nil
 }
 
 // Row is one row of a lookup table, as read.
@@ -117,10 +135,8 @@ func Render(e Entry, rows []Row) ([]byte, error) {
 			return nil, fmt.Errorf("%s: duplicate id %d in column %q", e.Table, id, e.ID)
 		}
 		ids[id] = true
-		// 0 is the zero value of the type and what a failed Parse returns:
-		// it must never be a valid row.
-		if id <= 0 {
-			return nil, fmt.Errorf("%s: invalid id %d in column %q (want > 0)", e.Table, id, e.ID)
+		if err := e.checkID(id); err != nil {
+			return nil, err
 		}
 
 		if !r.Label.Valid {

@@ -57,6 +57,16 @@ label = "name"
 		}
 	})
 
+	t.Run("optional allow_zero", func(t *testing.T) {
+		got, err := LoadConfig(writeConfig(t, "output = \"ref\"\n[[enum]]\ntable = \"vente_etape\"\nid = \"id\"\nlabel = \"label\"\nallow_zero = true\n"))
+		if err != nil {
+			t.Fatalf("LoadConfig() error = %v", err)
+		}
+		if !got.Enums[0].AllowZero {
+			t.Error("AllowZero = false, want true")
+		}
+	})
+
 	t.Run("missing file", func(t *testing.T) {
 		file := filepath.Join(t.TempDir(), "nope.toml")
 		_, err := LoadConfig(file)

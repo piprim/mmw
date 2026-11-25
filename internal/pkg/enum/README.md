@@ -22,6 +22,7 @@ table = "public.evenement_type" # schema defaults to public
 id    = "id"                    # integer column (int2, int4, int8): the value
 label = "sid"                   # column the names are derived from
 comment = "label"               # optional: column written as a comment
+allow_zero = false              # optional: accept a row whose id is 0
 ```
 
 `output`, `table`, `id` and `label` are required. An unknown key is an error.
@@ -41,6 +42,11 @@ file gets a second directive, `//go:generate go tool mmw db enum-doc
 module must therefore have mmw as a Go tool.
 
 Line breaks in the text become spaces; a NULL or empty text adds nothing.
+
+With `allow_zero = true`, a row whose id is `0` is a value like any other.
+The zero value of the Go type is then that row: a field left unset, or absent
+from the JSON, cannot be told from it. Use a pointer field where "not set"
+must stay distinct. Negative ids are always an error.
 
 ### Output
 
@@ -68,7 +74,7 @@ func (x *EvenementType) UnmarshalJSON(data []byte) error { … }
 ```
 
 In JSON the enum is its id (`{"type":5}`). Decoding an id that is not a row of
-the table, `0`, `null`, or anything that is not an integer is an error; use a
+the table (`0` included, unless `allow_zero` made it one), `null`, or anything that is not an integer is an error; use a
 pointer field for an optional value. The file compiles only once go-enum has
 generated its companion: `UnmarshalJSON` uses `IsValid` and `ErrInvalid…`.
 
@@ -104,8 +110,8 @@ written for any table, when:
 - the table or one of the two columns does not exist, or the id column is not
   an integer;
 - the table has no rows;
-- an id is NULL, appears twice, or is not above 0 (`0` is the zero value of
-  the type, so it is never a valid row);
+- an id is NULL, appears twice, is negative, or is 0 without `allow_zero`
+  (`0` is the zero value of the type);
 - a label is NULL, has no usable character, or starts with a digit;
 - two rows give the same name;
 - a comment has a `)` without its `(`: go-enum would end the enum there and
